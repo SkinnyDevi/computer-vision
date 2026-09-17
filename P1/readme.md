@@ -141,5 +141,6 @@ El resultado final se muestra en la ventana `ASCII Pop Art Effect`. La ejecució
 - Inspiración para la imagen Mondrian: [Ejemplo de Mondrian](https://www3.gobiernodecanarias.org/medusa/ecoescuela/sa/2017/04/17/descubriendo-a-mondrian/).
 - Conversación de IA sobre la detección de píxeles claro y oscuro: [Gemini](https://share.gemini.google/AOQYsRSd17rO).
 - Conversación de IA sobre la precomputación de la conversión a ASCII: [Gemini](https://share.gemini.google/KK4OFTzBhdzP).
+- Referencia para usar métodos nuevos: [GeeksForGeeks](https://www.geeksforgeeks.org/python/getting-started-with-python-opencv/).
 
 Las imágenes utilizadas en las explicaciones se encuentran en la carpeta de la práctica cuando están disponibles.
