@@ -170,6 +170,8 @@ run_live_detection_with_bubbles()
 
 La salida combina la imagen anotada con la máscara de piel y convierte las puntas de los dedos en puntos de interacción para el demostrador.
 
+![Imagen con filtro a tiempo real de detección de dedos y creación de burbujas](./docs/live_hand_filter_detection.png)
+
 ## 6. Limitaciones y posibles mejoras
 
 - La segmentación depende de la iluminación, el balance de blancos y el tono de piel capturado por la calidad de la cámara
