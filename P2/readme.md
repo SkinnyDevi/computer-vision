@@ -11,7 +11,7 @@
 
 Esta práctica explora dos problemas de visión por computador:
 
-1. Analizar la distribución espacial de los bordes de una imagen mediante Canny y Sobel.
+1. Analizar la distribución de los bordes de una imagen mediante Canny y Sobel.
 2. Construir un demostrador interactivo capaz de segmentar una mano, localizar sus dedos y generar burbujas en las puntas detectadas.
 
 ## Requisitos
