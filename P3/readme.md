@@ -1,4 +1,6 @@
-# Práctica 3 — Visión por Computador
+# Práctica 3 de Visión por Computador
+
+> Autores: Félix Miguel Velásquez, Cristina Santana Martín
 
 Implementación de dos problemas de visión artificial usando OpenCV y métodos clásicos, sin modelos de aprendizaje profundo:
 
@@ -174,6 +176,7 @@ El algoritmo de deteción ha resultado ser fiable para identificar fragmentos y 
 
 ## Bibliografia
 
+- [Medidas de monedas de EURO](https://www.carm.es/web/pagina?IDCONTENIDO=718&IDTIPO=100&RASTRO=c285$m)
 - [Detección de contornos de monedas](https://www.kaggle.com/code/mariamalkuwaiti/opencv-coin-detection-and-counting)
 - [Detección mediante circulos de Hough](https://dev.to/tinazhouhui/coin-detection-discovering-opencv-with-python-1ka1)
 - [Detección de imagenes estáticas de monedas](https://www.youtube.com/watch?v=_Coth4YESzk&list=UULFTiWJJhaH6BviSWKLJUM9sg)
