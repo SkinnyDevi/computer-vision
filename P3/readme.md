@@ -180,4 +180,5 @@ El algoritmo de deteción ha resultado ser fiable para identificar fragmentos y 
 - [Detección de contornos de monedas](https://www.kaggle.com/code/mariamalkuwaiti/opencv-coin-detection-and-counting)
 - [Detección mediante circulos de Hough](https://dev.to/tinazhouhui/coin-detection-discovering-opencv-with-python-1ka1)
 - [Detección de imagenes estáticas de monedas](https://www.youtube.com/watch?v=_Coth4YESzk&list=UULFTiWJJhaH6BviSWKLJUM9sg)
+- [Información sobre distintos tipos de umbralizado](https://www.luisllamas.es/opencv-umbralizacion-thresholding-adaptativo/)
 - [SMACC: A System for Microplastics Automatic Counting and Classification](https://doi.org/10.1109/ACCESS.2020.2970498)
