@@ -9,7 +9,7 @@ from src.core import YAMLConfig
 from src.core.yaml_utils import load_config      # next to your YAMLConfig import
 
 
-REPO = "RT-DETR/rtdetrv2_pytorch"
+REPO = "RT_DETR/rtdetrv2_pytorch"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Para usar el modelo, necesitamos descargar los pesos oficiales desde el Repositorio.

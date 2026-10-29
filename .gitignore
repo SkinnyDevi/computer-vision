@@ -3,3 +3,7 @@
 # Python cache files
 __pycache__/
 *.py[cod]
+
+yolo*
+RT_DETR/
+weights/
