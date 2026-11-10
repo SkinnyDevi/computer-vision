@@ -9,3 +9,5 @@ __pycache__/
 yolo*
 RT_DETR/
 image-dataset
+!yolo_dual_detections.csv
+!yolo_dual_detections_compressed.mp4
