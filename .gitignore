@@ -6,8 +6,21 @@ __pycache__/
 .venv
 
 *.mp4
-yolo*
-RT_DETR/
 image-dataset
+
+# YOLO excess files
+yolo*
 !yolo_dual_detections.csv
 !yolo_dual_detections_compressed.mp4
+
+# RT-DETR excess files
+RT_DETR/
+rtdetr*
+P4/P4a/runs/detect/runs_plate/plate_detector*/*.pth
+P4/P4a/runs/detect/runs_plate/plate_detector*/eval
+P4/P4a/runs/detect/runs_plate/plate_detector*/summary
+P4/P4a/runs/detect/runs_plate/plate_detector*/test_eval
+# !P4/P4a/runs/detect/runs_plate/plate_detector*/best.pth
+
+!rtdetr_dual_detections.csv
+!rtdetr_dual_detections_compressed.mp4

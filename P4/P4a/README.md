@@ -329,11 +329,6 @@ Se considerarán extras:
 - Evaluar dos alternativas para la detección de matrículas: una basada en YOLO y otra en RT-DETR (+1p).
 - Evaluar la detección de matrículas usando técnicas basadas en contornos (+0.25p)
 - Anonimizar a las personas y vehículos presentes en un vídeo (+0.25p).
-* Detect vehicles with YOLO
-* Get bbox and image of detection
-* Get lower half (or thresholded) of image
-* Create a detection algorithm (based on otsu or whatever, similar to coins) of rectangular objects (plate-like)
-* Confidence-like parameter can be included by evaluating a threshold of aspect_ratio of the detected rectangular blob
 
 
 
