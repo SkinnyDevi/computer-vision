@@ -1,337 +1,294 @@
-## Práctica 4. Detección de vehículos y matrículas
+# Práctica 4a de Visión por Computador — Detección y Seguimiento de Vehículos, Personas y Matrículas
 
-### Contenidos
+## Datos de la práctica
 
-[Tarea](#41-aspectos-cubiertos)  
-[YOLO](#42-yolo)  
-[Detectando](#43-detectando-desde-muestro-codigo)  
-[Entrenando YOLO](#44-entrenando-yolo)  
-[RT-DETR](#45-rt-detr)
-[Entrega](#46-entrega)
+- **Asignatura:** Visión por Computador
+- **Práctica:** P4a (Detección y seguimiento de objetos)
+- **Autor:** Félix Miguel Velásquez
+- **Cuaderno principal (YOLO11):** [`VC_P4_FMV.ipynb`](./VC_P4_FMV.ipynb)
+- **Cuaderno alternativo (RT-DETRv2):** [`VC_P4_FMV_RTDETR.ipynb`](./VC_P4_FMV_RTDETR.ipynb)
+- **Resultados generados (vídeos y CSV):** [`results/`](./results/)
 
-<!-- MOdelos VLM para OCR https://florence-2.com  -->
+---
 
-## 4.0 Sobre la práctica 4
+## Descripción
 
-Esta práctica se compone de dos tareas diferentes, detección y OCR. En este README se explica la primera tarea, la detección, para leer sobre la segunda ir a la carpeta *P4b*. Ambas tareas se entregan juntas, en el mismo GitHub, ya que serán evaluadas conjuntamente.
+Esta primera parte de la Práctica 4 aborda el diseño e implementación de un prototipo completo de procesado de vídeo para la **detección, clasificación, seguimiento (*tracking*) y conteo de vehículos, peatones y matrículas**, integrando tanto arquitecturas convolucionales de la familia **YOLO11** (Ultralytics) como arquitecturas basadas en *Transformers* (**RT-DETRv2**).
 
-## 4.1 Aspectos cubiertos
+En concreto, el trabajo desarrollado cubre los siguientes aspectos:
 
-En esta práctica se aborda el uso de modelos existentes para la detección de objetos y reconocimiento de texto. El principal objetivo que se propone es **desarrollar un prototipo que procese vídeo para la detección y seguimiento de vehículos y personas**. Si bien cuentan con libertad a la hora de escoger los módulos que integren en el prototipo, les sugerimos los siguientes:
+1. **Verificación, limpieza y particionado de un conjunto de datos de matrículas** (`2406` imágenes y `4371` matrículas anotadas), adaptándolo automáticamente a los formatos **YOLO** y **COCO**.
+2. **Entrenamiento y evaluación de un detector de matrículas propio** mediante *transfer learning* en dos familias de arquitecturas distintas (**YOLO11** y **RT-DETRv2**), analizando el impacto de la resolución de entrada (`640` vs `960` píxeles), el tamaño del lote (*batch size*) y la capacidad del modelo (*nano* vs *small*).
+3. **Procesamiento de vídeo con detección dual y seguimiento multi-objeto**, combinando un detector generalista para vehículos y personas (`person`, `car`, `motorbike`, `bus`) con el detector especialista de matrículas (`license_plate`).
+4. **Gestión de oclusiones de peatones (`PedestrianOcclusionManager`)** mediante correlación de histogramas HSV y proximidad espacial para mantener la identidad de las personas cuando un vehículo cruza por delante.
+5. **Asociación geométrica vehículo-matrícula, estabilización de clase por consenso temporal (moda)**, anonimización/censura mediante desenfoque gaussiano (**extra**), superposición de interfaz gráfica (HUD) en el vídeo de salida y exportación detallada fotograma a fotograma en formato **CSV**.
 
-- un detector de objetos general, que permita localizar vehículos y personas.
-- un localizador de matrículas.
+---
 
-Como modelo de partida para la detección de objetos sugerimos hacer uso de la familia de modelos basados en YOLO proporcionada por [Ultralytics](https://github.com/ultralytics/ultralytics). Esta familia de modelos, basados en redes neuronales, requirirá de un entrenamiento, y por lo tanto de un conjunto de datos, para detectar el objeto de interés, en este caso las matrículas.
+## Requisitos y entorno de ejecución
 
+Las pruebas y entrenamientos se han ejecutado sobre el siguiente entorno hardware y software:
 
-<!--De cara a localizar las matrículas, son dos las posibilidades a evaluar:
+- **CPU:** Intel Core i7-10700 (16 hilos)
+- **RAM:** 31.25 GB
+- **GPU:** NVIDIA GeForce RTX 3060 Ti (8 GB VRAM)
+- **Sistema Operativo:** Linux (Kernel 7.3.3-1-cachyos)
+- **Entorno Python:** Python `3.11.8`, PyTorch `2.6.0+cu124`, OpenCV `4.10.0`, Ultralytics `8.4.202`
 
-- Tras detectar un coche, las zonas probables de la matrícula estarán en su parte inferior, y además se asume que se corresponde a una zona rectangular (su contorno lo es)
-- Una segunda alternativa, plantea realizar un entrenamiento de YOLO para detectar el objeto de interés: matrículas
+Para instalar las dependencias necesarias:
 
-Evaluar ambas opciones se considerará un extra en la evaluación de la tarea. Otros aspectos a valorar, se recogen al final de este documento.
-
-
-[YOLO-NAS](https://github.com/Deci-AI/super-gradients/blob/master/documentation/source/YoloNASQuickstart.md) para mejorar con objetos pequeños y pocos recursos ...
--->
-
-
-## 4.2 YOLO
-
-<!-- environment VC_P1 e portátil -->
-
-Tras la presentación en 2023 de yolov8, Ultralytics puso a disposición yolo11 en septiembre de 2024, yolov12 en marzo de 2025 y yolo26 en 2026 (actualmente comentan el próximo anuncio de yolo27...) A lo largo del texto, al mencionar YOLO, hacemos referencia a un modelo genérico de ultralytics, pudiendo ser cualquier modelo. Para su instalación en un nuevo  *environment*, *VC_P4*, seguir los pasos del [tutorial de instalación de Ultralytics](https://docs.ultralytics.com/quickstart/#install-ultralytics). Por incompatibilidades con uno de los OCR vistos posteriormente, hemos hecho uso de la versión de python 3.9.5 y creado un nuevo *environment*.
-
-```
-conda create --name VC_P4 python=3.9.5
-conda activate VC_P4
-pip install ultralytics
-pip install lap
+```bash
+pip install -r requirements.txt
 ```
 
-Si no funcina con *lap*, probar
+Para la compresión final de los vídeos anotados con el códec H.264 (`libx264`) se requiere tener `ffmpeg` instalado en el sistema.
 
-```
-pip install lapx
-```
+---
 
-Si **cuentas con GPU**, para hacer uso de su potencia de cálculo en el *environment*, necesitas contar con CUDA instalado, y seguir las instrucciones para contar con todos los paquetes compatibles necesarios. Para la instalación, cuentas con esta [guía](https://pytorch.org/get-started/locally/) que te prepara la línea de comando a lanzar. Un ejemplo de la utilizada en mi equipo con CUDAv11.6:
+## 1. Conjunto de datos y preprocesamiento
 
-```
-conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6 -c pytorch -c conda-forge
-```
+Los modelos preentrenados en el conjunto de datos COCO incluyen clases para personas y distintos medios de transporte, pero carecen de una clase específica para **matrículas**. Por ello, se parte de un conjunto de datos colaborativo compuesto por imágenes de vehículos con matrículas españolas y sus correspondientes ficheros JSON de anotación.
 
+### 1.1. Verificación de integridad y limpieza (`LicensePlateDatasetLoader`)
 
-<!-- lap para usar el tracker desde código-->
+En ambos cuadernos se implementa la clase `LicensePlateDatasetLoader`, encargada de inspeccionar el directorio del conjunto de datos, emparejar cada imagen `.jpg`/`.jpeg` con su archivo `.json` homónimo y aplicar reglas de saneamiento:
 
-Una vez instalada, puede ejecutarse desde línea de comandos con algo como par auno de los modelos de yolo11:
+- **Normalización automática:** si alguna anotación contiene coordenadas expresadas en píxeles absolutos (`> 1.05`), se divide automáticamente por el ancho y alto reales de la imagen (`img_w`, `img_h`).
+- **Recorte a límites válidos (*clipping*):** se garantiza que todas las cajas delimitadoras (`[cx, cy, w, h]`) queden contenidas dentro del rango normalizado `[0.0, 1.0]`.
+- **Filtrado de ruido geométrico:** se descartan anotaciones distorsionadas o excesivamente verticales con una relación de aspecto real `w_px / h_px < 0.95`, así como cajas minúsculas consideradas ruido (`h_px < 6` o `w_px < 12` píxeles).
 
+El informe de integridad obtenido sobre el dataset refleja una correspondencia perfecta `1:1`:
 
-<!-- yolo detect predict model=yolo11n.pt source="C:/Users/otsed/Desktop/RUNNERS_ILUSOS/Multimedia/Bibs/TGC23_PdH_C0056_resultado.mp4"  -->
-```
-yolo detect predict model=yolo11n.pt source="rutaimg_video"
-```
+| Métrica del conjunto de datos | Valor |
+| --- | ---: |
+| Imágenes totales encontradas | `2406` |
+| Anotaciones JSON totales | `2406` |
+| Muestras emparejadas válidas | `2406` |
+| Imágenes sin anotación o corruptas | `0` |
+| Total de cajas delimitadoras (*bounding boxes*) válidas | `4371` |
 
-![Segmentación](images/yolo11-detect.jpg)  
-*Resultado del modelo yolo11n.pt con la imagen test.jpg*
+A continuación se muestra una cuadrícula con muestras aleatorias del conjunto de datos y sus cajas anotadas en verde (`SEED = 42`):
 
+![Muestras anotadas del conjunto de datos de matrículas](./images/docs/plate_dataset.png)
 
-Con *model* se define el modelo preentrenado a utilizar, los resultados los almacena en la carpeta *runs/detect/predict*. Los distintos parámetros
-de la ejecución se describen en la documentación del modo [*predict*](https://docs.ultralytics.com/modes/predict/). El modelo escogido detecta contenedores, para la segmentación semántica (proporciona la máscara del objeto)
-aplicar por ejemplo el modelo *yolov11n-seg.pt*, con un resultado similar al de la imagen.
+### 1.2. División en entrenamiento, validación y test
 
-```
-yolo detect predict model=yolo11n-seg.pt source="rutaimg_video"
-```
-<!-- yolo detect predict model=yolo11n-seg.pt source="C:/Users/otsed/Desktop/RUNNERS_ILUSOS/Multimedia/Bibs/TGC23_PdH_C0056_resultado.mp4"  -->
+Utilizando una semilla fija (`SEED = 42`) para garantizar la reproducibilidad entre todos los experimentos y arquitecturas, las `2406` imágenes se dividen de forma aleatoria con una proporción **75 % / 15 % / 10 %**:
 
-![Segmentación](images/yolo11-seg.jpg)  
-*Resultado del modelo yolo11n-seg.pt con la imagen test.jpg*
+| Subconjunto (*Split*) | Proporción | Imágenes | Matrículas anotadas |
+| --- | ---: | ---: | ---: |
+| **Train** (Entrenamiento) | `74.98 %` | `1804` | `3243` |
+| **Val** (Validación) | `14.96 %` | `360` | `681` |
+| **Test** (Evaluación final) | `10.06 %` | `242` | `447` |
+| **Total** | `100.00 %` | `2406` | `4371` |
 
-Otro interesante modelo disponible es el detector de pose, que obtiene un resultado como el de la siguiente imagen.
+- **Preparación para YOLO (`prepare_yolo_dataset`):** crea la jerarquía `images/{train,val,test}` y `labels/{train,val,test}`, empleando enlaces simbólicos (`os.symlink`) para no duplicar las imágenes en disco, convirtiendo cada etiqueta al formato `<class_id> <cx> <cy> <w> <h>` con `class_id = 0` (`license_plate`) y generando el fichero `data.yaml`.
+- **Preparación para RT-DETR (`prepare_rtdetr_dataset`):** pre-reescala las imágenes en paralelo (`ThreadPoolExecutor`) a la resolución objetivo manteniendo una proporción `16:9` (por ejemplo, `960x540` para `IMGSZ = 960`) para evitar cuellos de botella de lectura/memoria en imágenes de alta resolución, y exporta los ficheros `instances_{train,val,test}.json` con coordenadas absolutas `[x1, y1, width, height]` en formato estándar **COCO**.
 
+---
 
-```
-yolo pose predict model=yolo11n-pose.pt source="rutaimg_video"
-```
+## 2. Entrenamiento y evaluación con YOLO11
 
-![Segmentación](images/yolo11-pose.jpg)  
-*Resultado del modelo yolo11n-pose.pt con la imagen test.jpg*
+### 2.1. Configuración y experimentos realizados
 
-<!-- yolo pose predict model=yolo11n-pose.pt source="C:/Users/otsed/Desktop/RUNNERS_ILUSOS/Multimedia/Bibs/TGC23_PdH_C0056_resultado.mp4"  -->
+Las matrículas suelen ocupar una fracción muy pequeña del área total del fotograma, especialmente cuando los vehículos se encuentran alejados. Para maximizar su detección con **YOLO11**, se diseñaron varios experimentos variando el tamaño del modelo (`yolo11n.pt` frente a `yolo11s.pt`), la resolución de entrada (`imgsz = 640` frente a `imgsz = 960`) y el tamaño de lote (`batch = 8` frente a `batch = 16`).
 
-<!--A este segundo también le añadí la opción "device" para decirle qué tarjetas tiene que usar.-->
+En la configuración final seleccionada (`plate_detector_960_BATCH_16_small`) se emplearon los siguientes hiperparámetros clave:
 
-La versión de yolo de Ultralytics integra la posibilidad de realizar [seguimiento (tracking)](https://docs.ultralytics.com/modes/track/#features-at-a-glance),
-de momento con los modelos **BoT-SORT** (por defecto) y **ByteTrack**.
-
-
-<!-- C:\Users\otsed\Desktop\RUNNERS_ILUSOS\Multimedia\Bibs\TGC23_PdH_C0056.mp4 -->
-```
-yolo track model=yolo11n-pose.pt source="ruta_video"
-```
-
-En todos los casos, el resultado se almacena en la carpeta *runs*.
-
-![Segmentación](images/yolov8-tracker.png)  
-*Resultado del BoT-SORT*
-
-
-### 4.3 Detectando desde código
-
-Aunque en la sección [YOLO](#42-yolo) se presentan varios ejemplos de uso desde línea de comando, lo más habitual será manejar los modelos desde nuestro propio código. Para ello, en las primeras celdas del cuaderno ejemplo, *VC_P4.ipynb*, se incluyen ejemplos
-de procesamiento y dibujado de las cajas contenedoras haciendo uso del modelo *yolo11n.pt* desde código python procesando la entrada de la webcam, tanto para detección, como para detección y seguimiento.
-En el primer caso, se consideran todas las clases sin realizar ningún tipo de filtrado, mientras que para realizar el seguimiento se restringen las clases de interés.
-(También se incluye una celda preparada para procesar un vídeo en disco pudiendo escoger el modelo).
-
-
-
-Si quieres acceder a vídeos utilizados para evaluar las técnicas de seguimiento, prueba este [enlace](https://motchallenge.net/data/MOT15/).
-
-
-### 4.4 Entrenando YOLO
-
-Tras hacer uso de YOLO como detector, esta sección aborda el entrenamiento personalizado para detectar objetos de nuestro interés, a partir de cajas contenedoras. De cara a la tarea propuesta, los modelos de YOLO no incluyen la detección de matrículas, por lo que se hace necesario realizar entrenar un modelo propio. El vídeo de test proporcionado incluirá principalmente matrículas españolas, siendo una primera subtarea recopilar o capturar imágenes o vídeos que contengan vehículos con su matrícula visible. Si necesitan cámaras, trípode, etc. hablen con nosotros.
-
-#### Anotación de imágenes
-
-Para realizar un entrenamiento, aparte claro está del modelo a entrenar, necesitaremos un conjunto de datos anotado, en este caso, para la detección de matrículas en coches. Para conformalo, necesitaremos, obtener imágenes con muestras del objeto de interés y realizar las anotaciones en dichas imágenes.
-
-La recopilación de imágenes puede realizarse de distintas maneras
-
-- accediendo a algún conjunto de datos ya existente
-- creando el conjunto de datos
-
-En el segundo caso será necesario recopilar imágenes, pudiendo ser de forma manual, o utilizando utilidades que permitan descargar imágenes realizando búsquedas. Un ejemplo de utilidad, es la proporcionada por [google_images_download](https://pypi.org/project/google_images_download/) que facilita la descarga de un número de imágenes obtenidas realizando búsquedas a través de google.
-
-Tras esta recopilación será necesario en primer término limpiar y filtrar las imágenes, para posteriormente anotar las muestras de nuestro objeto de interés. Asumo una anotación en base a contenedores rectangulares, si bien las herramientas de anotación permiten más variantes.
-
-Si bien existen numerosas herramientas de anotación, las más frecuentes en el grupo han sido:
-
-- [VoTT (Visual Object Tagging Tool)](https://github.com/microsoft/VoTT)
-- [labelme](https://github.com/wkentaro/labelme)
-
-
-La primera de ellas ya no está mantenida. La segunda puede instalarse a través de anaconda, permitiendo distintos tipos de anotación. Para nuestro propósito optaremos por un esquema rectangular. Tras almacenar las anotaciones puede ser necesaria alguna adaptación dependiendo de la red que se use para entrenar. También está la posiblidad de realizar una pequeña aplicación de anotación propia usando python, lo que nos permitirá implementar exactamente las características que necesitemos. A continuación, se presentan las instrucciones para usar labelme.
-
-```
-conda create --name=labelme python=3.9
-conda activate labelme
-pip install labelme
+```python
+EPOCHS = 120
+BATCH_SIZE = 16
+IMGSZ = 960
+PATIENCE = 30
 ```
 
-Una vez instalado *labelme*, el proceso desde *Anaconda Prompt*:
+- **Entrenamiento rectangular (`rect=True`) y precisión mixta (`amp=True`):** reduce el relleno innecesario en los bordes de las imágenes panorámicas y acelera el cálculo en GPU evitando desbordamientos numéricos.
+- **Ponderación de la función de pérdida:** se incrementó la ganancia de regresión de cajas (`box = 8.5`, frente al valor por defecto `7.5`) junto con `dfl = 1.5` y `cls = 1.5` para forzar un ajuste más ceñido a los bordes de la matrícula.
+- **Aumento de datos (*Data Augmentation*):** variaciones fotométricas en espacio HSV (`hsv_s = 0.6`, `hsv_v = 0.4`), rotaciones suaves (`degrees = 5.0`), traslación (`translate = 0.1`), escalado (`scale = 0.5`) y `mosaic = 0.5` desactivado durante las últimas 20 épocas (`close_mosaic = 20`) para estabilizar la convergencia final.
 
-- Teclear *labelme*
-- Una vez abierta la interfaz, seleccionar la carpeta con imágenes a anotar
-- En nuestro caso, que anotaremos zonas rectangulares, escoger *Edit->Create Rectangle*
+La siguiente tabla resume los resultados obtenidos en validación a lo largo de las distintas configuraciones exploradas en [`runs/detect/runs_plate/`](./runs/detect/runs_plate/):
 
-La anotación genera un *json* para cada imagen. Sugerir en cualquier caso echar un vistazo a la [documentación sobre el uso](https://github.com/wkentaro/labelme#usage).
+| Experimento YOLO11 | Modelo base | Resolución (`imgsz`) | Batch | Épocas (Mejor) | Precision (Val) | Recall (Val) | mAP@50 (Val) | mAP@50-95 (Val) |
+| --- | --- | :---: | :---: | :---: | ---: | ---: | ---: | ---: |
+| `plate_detector_640_small` | `yolo11s.pt` | `640` | `16` | `105 (75)` | `87.33 %` | `83.89 %` | `86.75 %` | `49.48 %` |
+| `plate_detector_640_BATCH_8_small` | `yolo11s.pt` | `640` | `8` | `120 (100)` | `87.32 %` | `76.21 %` | `78.25 %` | `42.63 %` |
+| `plate_detector_960_BATCH_8_nano` | `yolo11n.pt` | `960` | `8` | `94 (64)` | `82.75 %` | `75.39 %` | `78.40 %` | `39.27 %` |
+| **`plate_detector_960_BATCH_16_small`** | **`yolo11s.pt`** | **`960`** | **`16`** | **`120 (120)`** | **`83.37 %`** | **`80.22 %`** | **`81.22 %`** | **`42.86 %`** |
 
-No es obligatorio utilizar esta herramienta en concreto, hay numerosas y podrás encontrar comparativas.
-Existen también numerosos servicios en la nube, como por ejemplo [Roboflow](https://app.roboflow.com/login) que requieren crearse una cuenta para acceder a las utilidades, [CVAT](https://www.cvat.ai) o [TigTag](https://www.tictag.io) que permite anotar desde el móvil. Te invito a explorar y escoger la herramienta que más te atraiga para el proceso de anotación.
+Aunque el modelo a `640` con *batch* `16` obtiene una métrica alta sobre recortes estáticos del conjunto de validación, el modelo **`plate_detector_960_BATCH_16_small`** demostró un comportamiento más sólido al generalizar sobre vídeo completo en alta definición (`1920x1080`) gracias a su mayor resolución de entrada (`960x960`) y a la estabilidad aportada por el `batch = 16` frente a los entrenamientos con `batch = 8` o arquitectura *nano*.
 
-Lo importante es que sea cómoda y fácil de usar, y se agradece que permita exportar a varios formatos, incluyendo YOLO, que es el que será necesario para realizar el entrenamiento con YOLO.
+### 2.2. Análisis de las gráficas de entrenamiento (plate_detector_960_BATCH_16_small)
 
-<!---Momentos en trabajo de Nayar sobre Binary images https://cave.cs.columbia.edu/Statics/monographs/Binary%20Images%20FPCV-1-3.pdf -->
+![Evolución de pérdidas y métricas durante el entrenamiento de YOLO11s (960, batch 16)](./runs/detect/runs_plate/plate_detector_960_BATCH_16_small/results.png)
 
-<!-- Guías CVAT
-https://www.simonwenkel.com/lists/software/list-of-annotation-tools-for-machine-learning-research.html
-https://www.v7labs.com/blog/cvat-guide
--->
+Analizando las curvas de evolución del entrenamiento (`results.png`):
 
-#### Entrenamiento
+- **Funciones de pérdida (`box_loss`, `cls_loss`, `dfl_loss`):** tanto en entrenamiento como en validación muestran un descenso constante y suave a lo largo de las 120 épocas, sin síntomas de *overfitting*. En particular, `val/box_loss` desciende desde `~2.8` hasta estabilizarse en torno a `1.68`, y `val/dfl_loss` baja de `1.85` a `~1.12`, con un pequeño escalón de mejora adicional a partir de la época 100 cuando se desactiva el aumento por mosaico (`close_mosaic = 20`).
+- **Evolución de métricas (`precision`, `recall`, `mAP50`, `mAP50-95`):** las curvas crecen rápidamente durante las primeras 35 épocas y continúan mejorando de forma progresiva hasta alcanzar el máximo en la época 120 (`mAP@50 = 81.22 %` en validación).
 
-Tras utilizar uno o varios modelos preentrenados de YOLO para detección, el propósito de este apartado es aportar las pautas para entrenar un detector basado en YOLO del objeto u objetos que nos sea de interés.
+### 2.3. Evaluación en el conjunto de Test y predicciones visuales (YOLO11s)
 
-Una vez recopiladas las imágenes y realizadas las anotaciones, antes de proceder a entrenar con YOLO, es necesario disponer las imágenes de determinada forma, y posteriormente especificar las rutas en la llamada. La siguiente imagen
-muestra la estructura de directorios creadas para un conjunto de datos denominado *TGCRBNW*.
+Al evaluar los mejores pesos (`best.pt`) sobre las **242 imágenes del conjunto de test** (`447` matrículas) con un umbral IoU de `0.55` para suprimir detecciones duplicadas en objetos pequeños, se obtienen las siguientes métricas finales:
 
-![Directorios](images/dirs.png)
+| Métrica (Conjunto de Test — YOLO11s) | Valor |
+| --- | ---: |
+| **Precision (P)** | **85.29 %** (`0.8529`) |
+| **Recall (R)** | **83.45 %** (`0.8345`) |
+| **mAP@50** | **83.11 %** (`0.8311`) |
+| **mAP@50-95** | **44.36 %** (`0.4436`) |
 
-Contiene tres subcarpetas:
+| Curva Precision-Recall (Test) | Matriz de confusión normalizada (Test) |
+| :---: | :---: |
+| ![Curva PR en Test de YOLO11s](./runs/detect/runs_plate/plate_detector_960_BATCH_16_small/val-3/BoxPR_curve.png) | ![Matriz de confusión normalizada en Test de YOLO11s](./runs/detect/runs_plate/plate_detector_960_BATCH_16_small/val-3/confusion_matrix_normalized.png) |
 
-- *test*
-- *train*
-- *val*
+La curva *Precision-Recall* sobre el conjunto de test alcanza un área bajo la curva de **`0.831 mAP50`**, manteniendo una precisión superior al `85 %` para niveles de *recall* de hasta el `80 %`. Asimismo, la matriz de confusión normalizada confirma que el **92 %** de las matrículas reales son detectadas correctamente frente a tan solo un **8 %** de omisiones con el fondo.
 
-Cada una de ellas a su vez contiene dos subcarpetas:
+A continuación se muestran las predicciones del modelo sobre 9 imágenes aleatorias del conjunto de test (`conf_threshold = 0.40`), indicando en el título de cada imagen las matrículas detectadas (`detected`), las válidas tras el filtrado del cargador (`total`) y las anotadas originalmente en bruto (`real`):
 
-- *images*
-- *labels*
+![Predicciones de YOLO11s sobre muestras del conjunto de test](./images/docs/yolo_detections_960_16.png)
 
-La primera de ellas contiene las imágenes que se han anotado, mientras que la segunda carpeta contiene para cada imagen anotada su archivo *.txt* homónimo con las correspondientes anotaciones de la imagen. Recordar que el formato esperado por YOLO debe ser algo como:
+Se observa cómo el modelo localiza con alta precisión matrículas frontales y traseras en condiciones variadas de iluminación (día, sombra y escena nocturna con reflejos en `20261031_191042`), así como matrículas parcialmente ocluidas tras una valla metálica (`Test: 1 (25)`). Incluso en casos como `IMG_9227` o `20261031_191042`, donde el cargador había descartado la anotación original por su tamaño/relación de aspecto (`total: 0 | real: 1`), el modelo entrenado logra detectar la matrícula correctamente (`detected: 1`).
 
+---
+
+## 3. Alternativa basada en Transformers: RT-DETRv2 (Extra)
+
+Como alternativa a la familia YOLO (cuya licencia AGPL-3.0 restringe su integración directa en proyectos cerrados), en el cuaderno [`VC_P4_FMV_RTDETR.ipynb`](./VC_P4_FMV_RTDETR.ipynb) se ha implementado el flujo completo de entrenamiento, evaluación y *tracking* utilizando **RT-DETRv2** (*Real-Time DEtection TRansformer*, licencia Apache 2.0).
+
+### 3.1. Configuración y entrenamiento de RT-DETRv2-S
+
+Se seleccionó la variante **RT-DETRv2-S** con *backbone* **PResNet18** (`rtdetrv2_r18vd_120e_coco_rerun_48.1.pth`, `~20.08M` parámetros entrenables), adaptando su cabezal de clasificación a `num_classes = 1` (`license_plate`) y entrenando mediante el criterio `RTDETRCriterionv2`, que combina:
+
+- **Varifocal Loss (`loss_vfl`):** con peso `1.5` ($\alpha = 0.75, \gamma = 2.0$).
+- **Pérdida de regresión L1 (`loss_bbox`):** con ganancia `8.5`.
+- **Pérdida GIoU (`loss_giou`):** con peso `2.0`.
+- **Emparejamiento bipartito (`HungarianMatcher`):** asigna predicciones a objetos reales de forma única sin necesidad de etapa de *Non-Maximum Suppression* (NMS).
+
+Se realizaron dos entrenamientos en [`runs/detect/runs_plate/`](./runs/detect/runs_plate/) para analizar el efecto de la resolución espacial y el número de épocas:
+
+| Experimento RT-DETRv2 | Modelo | Resolución | Batch | Épocas (Mejor) | mAP@50 (Val) | mAP@50-95 (Val) | AR@100 (Val) |
+| --- | --- | :---: | :---: | :---: | ---: | ---: | ---: |
+| `plate_detector_rtdetr_v2_s_640_BATCH_16` | RT-DETRv2-S | `640x640` | `16` | `60 (55)` | `71.82 %` | `37.96 %` | `48.63 %` |
+| **`plate_detector_rtdetr_v2_s_960_BATCH_8`** | **RT-DETRv2-S** | **`960x960`** | **`8`** | **`120 (118)`** | **`85.03 %`** | **`51.30 %`** | **`63.17 %`** |
+
+El salto de `640x640` a `960x960` con 120 épocas supone una mejora sustancial de **+13.21 puntos en `mAP@50`** y **+13.34 puntos en `mAP@50-95`**, confirmando que el codificador híbrido de RT-DETR aprovecha de forma muy notable el aumento de resolución espacial para resolver objetos pequeños como las matrículas.
+
+![Evolución de pérdidas y métricas COCO durante el entrenamiento de RT-DETRv2-S (960, batch 8)](./runs/detect/runs_plate/plate_detector_rtdetr_v2_s_960_BATCH_8/results.png)
+
+En las gráficas generadas a partir del registro `log.txt` del entrenamiento (`960x960`, `batch = 8`):
+
+1. **Curvas de pérdida (*Training Loss per Epoch*):** la pérdida total (incluyendo las pérdidas auxiliares de las capas del decodificador y las ramas de *denoising*) cae drásticamente desde `~25.3` en la primera época hasta `~3.6` en la época 120, mientras que las pérdidas individuales `VFL`, `Bbox` y `GIoU` convergen de manera estable por debajo de `0.5`.
+2. **Curvas de validación (`mAP` y `mAR`):** el modelo alcanza más de un `80 %` de `mAP@50` apenas en la época 12 y continúa refinando la localización estricta (`mAP@75` y `mAP@50-95`) hasta estabilizarse en torno al `85.0 %` de `mAP@50` y `51.3 %` de `mAP@50-95`.
+
+### 3.2. Evaluación en el conjunto de Test y comparativa frente a YOLO11s
+
+Al evaluar el mejor *checkpoint* de **RT-DETRv2-S** (`best.pth`) sobre el mismo conjunto de test (`242` imágenes, `447` matrículas) mediante el evaluador oficial COCO (`faster_coco_eval`), se obtienen los siguientes resultados:
+
+| Métrica en Conjunto de Test | YOLO11s (`960`, `batch=16`) | RT-DETRv2-S (`960`, `batch=8`) |
+| --- | ---: | ---: |
+| **mAP@50** | `83.11 %` | **86.53 %** |
+| **mAP@75** | — | **55.78 %** |
+| **mAP@50-95** | `44.36 %` | **53.10 %** |
+| **Recall / AR@50** | `83.45 %` | **94.00 %** (`AR@100: 65.21 %`) |
+
+- **Desglose por escala en RT-DETRv2-S (Test):** el evaluador COCO reporta un `mAP@50-95` de `43.7 %` en matrículas pequeñas (*small*), `64.3 %` en medianas (*medium*) y `73.6 %` en grandes (*large*).
+- **Comparación directa:** **RT-DETRv2-S** supera a **YOLO11s** tanto en `mAP@50` (`86.53 %` vs `83.11 %`) como especialmente en **`mAP@50-95` (`53.10 %` vs `44.36 %`, +8.74 puntos)**, lo que indica que las cajas determinadas por el *Transformer* se ajustan con mayor exactitud espacial a los contornos reales de las matrículas.
+
+![Predicciones de RT-DETRv2-S sobre las mismas muestras del conjunto de test](./images/docs/rtdetr_detections_960_8.png)
+
+Comparando visualmente las predicciones de **RT-DETRv2-S** con las de **YOLO11s** sobre las mismas 9 imágenes de test (`SEED = 42`), se aprecia que RT-DETRv2-S asigna puntuaciones de confianza más altas y definidas en la mayoría de los vehículos (por ejemplo, `0.96` frente a `0.83` en el primer coche, o `0.85` frente a `0.49` en la imagen inferior izquierda).
+
+Cabe destacar que, a efectos teóricos, RT-DETRv2 obtiene mejores resultados frente a YOLOv11s. Está comparativa no se traslada al completo a la práctica. En el caso de la imágen 2, podemos ver como RT-DETRv2 a hecho una detección adicional innecesaria, confundiendo el texto de anuncio de la furgoneta blanca con su matrícula. Aún teniendo estos defectos prácticos, ambos modelos han presentado mejoras de reconocimiento, detectando matrículas en las imágenes de test, las cuales no fueron anotadas, pero se podrían reconocer como un acierto por el modelo.
+
+---
+
+## 4. Procesamiento de vídeo, seguimiento y extras (`LicensePlateVideoProcessor`)
+
+Para procesar el vídeo de prueba (`plate_test_video.mp4`, de `2832` fotogramas a `25 FPS`, duración `01:53`), se ha diseñado la clase modular `LicensePlateVideoProcessor`, que coordina en cada fotograma la detección dual, el seguimiento multi-objeto, la resolución de oclusiones, la anonimización y el registro de resultados.
+
+### 4.1. Arquitectura dual de detección y *tracking*
+
+En cada fotograma se ejecutan dos modelos en paralelo con un umbral de confianza `CONFIDENCE_THRESHOLD = 0.35`:
+
+1. **Detector y *tracker* de vehículos y peatones:** filtra exclusivamente las clases de interés del estándar COCO (`0: person`, `2: car`, `3: motorbike`, `5: bus`).
+   - En el cuaderno **YOLO11**, se utiliza `yolo11n.pt` integrado con el algoritmo **BoT-SORT** (`yolo_tracker_file.yaml`), configurado con compensación de movimiento global por flujo óptico disperso (`gmc_method: sparseOptFlow`), fusión de puntuación de confianza (`fuse_score: True`) y un búfer de memoria de `track_buffer: 90` fotogramas.
+   - En el cuaderno **RT-DETR**, se implementa desde cero la clase `RTDETRTracker` dentro de `RTDETRPredictor`, que mantiene las trayectorias activas asociando las detecciones entre fotogramas consecutivos mediante matrices de **IoU** y asignación óptima con el **algoritmo húngaro** (`scipy.optimize.linear_sum_assignment`), conservando pistas perdidas hasta `max_lost_frames = 45`.
+2. **Detector especialista de matrículas:** aplica el modelo entrenado (`best.pt` en YOLO11s o `best.pth` en RT-DETRv2-S) sobre cada fotograma y asocia cada matrícula detectada a su vehículo correspondiente mediante `plate_belongs_to_vehicle()`, comprobando si el centro de la matrícula cae dentro del *bounding box* del vehículo o si la intersección supera el **50 %** del área de la matrícula. Si una matrícula no puede vincularse a ningún vehículo en ese instante, se registra como `orphan_plate`.
+
+### 4.2. Gestión de oclusiones de peatones (`PedestrianOcclusionManager`)
+
+Un problema clásico de los *trackers* multi-objeto ocurre cuando un coche o autobús pasa por delante de un peatón: al reaparecer el peatón varios fotogramas después, el *tracker* suele asignarle un `track_id` nuevo, inflando artificialmente el conteo total de personas. Para solucionarlo, se ha implementado la clase `PedestrianOcclusionManager`:
+
+1. **Extracción de apariencia:** para cada peatón detectado se calcula y normaliza un histograma conjunto en el espacio de color **HSV** (`16 x 16` *bins* sobre los canales *Hue* y *Saturation*).
+2. **Detección de desaparición por oclusión:** cuando un peatón activo deja de detectarse en el fotograma actual, se comprueba si su última caja conocida se solapaba con la caja de algún vehículo (`occluded_by_vehicle = True`) y se almacena en `lost_tracks` hasta un máximo de `max_gap_frames = 90` fotogramas.
+3. **Re-identificación y remapeo de ID (`_check_lost_tracks`):** cuando aparece un nuevo ID de peatón, se compara con las pistas perdidas evaluando una distancia euclídea adaptativa (`min(220, 40.0 + gap * 3.5)` píxeles) y la correlación entre sus histogramas HSV (`cv2.compareHist` con `cv2.HISTCMP_CORREL`). Si supera el umbral de similitud (`>= 0.60`, o `> 0.35` a menos de `90 px` si fue ocluido por un vehículo), el nuevo ID se enlaza en `id_remap` con el `canonical_id` original de la persona.
+
+### 4.3. Consenso temporal de clase y conteo de objetos únicos
+
+Para evitar fluctuaciones esporádicas en la clasificación de un mismo objeto a lo largo de su trayectoria (por ejemplo, un coche que en un fotograma aislado se clasifica como autobús o furgoneta) y descartar falsos positivos fugaces:
+
+- Se mantiene un historial `track_class_history[track_id]` con un contador de frecuencias (`Counter`) de las clases asignadas en cada fotograma.
+- En cada instante, la clase mostrada para un `track_id` es la **moda estadística** (`most_common(1)`) de su historial.
+- En el marcador superior (HUD) y en el conteo final solo se contabilizan como **objetos únicos confirmados** aquellas trayectorias que hayan sido detectadas durante al menos `FRAMES_TO_CONFIRM_CLASS = 5` fotogramas.
+
+### 4.4. Anonimización de personas y vehículos (Extra)
+
+Con el parámetro `APPLY_CENSORING = True`, el procesador aplica automáticamente un filtro de privacidad antes de volcar cada fotograma al vídeo de salida:
+
+- **Peatones (`_apply_people_censor`):** aplica un desenfoque gaussiano intenso (`cv2.GaussianBlur` con kernel `25x25` y $\sigma = 30$) sobre el cuarto superior (`1/4`) de la caja delimitadora de cada persona para anonimizar su rostro.
+- **Vehículos (`_apply_incoming_car_censor`):** aplica el mismo desenfoque gaussiano sobre el tercio superior (`1/3`, zona del parabrisas y ocupantes) de los vehículos detectados con confianza `>= 0.65`.
+
+### 4.5. Resultados del procesamiento del vídeo y archivos generados
+
+Tanto el vídeo anotado (con cajas **azules/cian** para vehículos, **naranjas** para peatones, **verdes** para matrículas y barra superior **HUD** con el recuento acumulado en vivo) como el fichero CSV se han generado con ambas arquitecturas en la carpeta [`results/`](./results/):
+
+- **Pipeline YOLO11 (`yolo11n.pt` + `yolo11s` matrículas):**
+  - Vídeo comprimido: [`results/yolo_dual_detections_compressed.mp4`](./results/yolo_dual_detections_compressed.mp4)
+  - Registro CSV: [`results/yolo_dual_detections.csv`](./results/yolo_dual_detections.csv)
+- **Pipeline RT-DETRv2 (`RT-DETRv2-S` vehículos + `RT-DETRv2-S` matrículas):**
+  - Vídeo comprimido: [`results/rtdetr_dual_detections_compressed.mp4`](./results/rtdetr_dual_detections_compressed.mp4)
+  - Registro CSV: [`results/rtdetr_dual_detections.csv`](./results/rtdetr_dual_detections.csv)
+
+La siguiente tabla compara el recuento total de **objetos únicos confirmados** (`>= 5` fotogramas) y el total de **detecciones brutas acumuladas** a lo largo de los `2832` fotogramas del vídeo:
+
+| Clase de objeto | Objetos únicos (YOLO11) | Detecciones brutas (YOLO11) | Objetos únicos (RT-DETRv2) | Detecciones brutas (RT-DETRv2) |
+| --- | ---: | ---: | ---: | ---: |
+| **Personas (`person`)** | `27` | `3047` | `77` | `8862` |
+| **Coches (`car`)** | `166` | `17813` | `310` | `30998` |
+| **Motos (`motorbike`)** | `3` | `79` | `10` | `336` |
+| **Autobuses (`bus`)** | `1` | `217` | `6` | `686` |
+| **Matrículas confirmadas (`license_plate`)** | `46` | `3936` | `58` | `2734` |
+
+#### Comparación del comportamiento en vídeo (YOLO11 vs RT-DETRv2)
+
+1. **Sensibilidad a objetos lejanos vs estabilidad de seguimiento:** el detector generalista **RT-DETRv2-S** es notablemente más sensible que `yolo11n.pt` ante vehículos aparcados al fondo y peatones lejanos, generando casi el doble de detecciones por fotograma (`30998` vs `17813` en coches). Sin embargo, al emplear un *tracker* basado únicamente en IoU + algoritmo húngaro frente a **BoT-SORT** (que integra filtro de Kalman y compensación de movimiento óptico `sparseOptFlow`), las pequeñas interrupciones en objetos lejanos producen una mayor fragmentación de trayectorias en RT-DETR (`310` IDs de coches frente a `166` en YOLO11).
+2. **Detección de matrículas asociadas a vehículos:** mientras que **YOLO11s** acumula más detecciones brutas por fotograma (`3936`), **RT-DETRv2-S** consigue confirmar matrículas en un mayor número de vehículos distintos a lo largo del vídeo (**`58` vehículos con matrícula confirmada frente a `46`**), en consonancia con el mayor `mAP@50` (`86.53 %`) y `mAP@50-95` (`53.10 %`) observado en el conjunto de test.
+
+#### Estructura del archivo CSV
+
+Ambos ficheros CSV siguen exactamente la estructura de 15 columnas solicitada en el guion de la práctica:
+
+```csv
+fotograma,tipo_objeto,confianza,identificador_tracking,x1,y1,x2,y2,matrícula_en_su_caso,confianza,mx1,my1,mx2,my2,texto_matricula
+1,bus,0.9357,1,1402,52,1918,476,yes,0.4412,1903,409,1920,429,bus_1_plate
+1,car,0.8437,2,1321,312,1398,371,yes,0.4640,1355,339,1377,347,car_2_plate
+1,car,0.4915,3,1231,313,1279,343,no,,,,,,
+1,license_plate,0.3698,,977,321,997,329,yes,0.3698,977,321,997,329,orphan_plate
 ```
-<object-class-id> <x> <y> <width> <height>
-```
 
-Los datos de cada línea se refieren a:
+---
 
-- *object-class-id*: identificador numérico de la clase del objeto anotado
-- *x*: coordenada *x* del centro de la ventana
-- *y*: coordenada *y* del centro de la ventana
-- *width*: ancho del contenedor
-- *height*: alto del contenedor
+## 5. Limitaciones y posibles mejoras
 
-Las coordenadas del centro y dimensiones del contenedor estarán normalizadas, es decir, divididas por las dimensiones de la imagen.
+- **Resolución de las matrículas a larga distancia:** aunque entrenar a `960x960` mejora drásticamente la localización respecto a `640x640`, los vehículos situados en el plano más alejado de la escena presentan matrículas de apenas unos pocos píxeles de altura. Una estrategia en cascada (recortar primero la caja del vehículo a su resolución nativa `1080p` y pasar dicho recorte al detector de matrículas) permitiría detectar matrículas aún más lejanas, a costa de un mayor tiempo de inferencia por fotograma.
+- **Fragmentación de trayectorias en RT-DETR:** el `RTDETRTracker` basado en IoU y asignación húngara funciona bien en objetos cercanos y con movimiento suave, pero podría integrarse con un filtro de Kalman y compensación de movimiento de cámara (como en BoT-SORT o ByteTrack) para igualar la estabilidad de IDs lograda en el pipeline de YOLO.
+- **Integración con OCR (Práctica 4b):** en esta primera parte (`P4a`), la columna `texto_matricula` almacena un identificador simbólico (`<tipo>_<track_id>_plate` u `orphan_plate`), dejando lista la estructura de asociación espacial y temporal para acoplar los modelos de reconocimiento óptico de caracteres (OCR clásicos y VLMs) en la **Práctica 4b**.
 
-Para distribuir las imágenes en las tres subcarpetas, debemos llevar a cabo un reparto. Lo habitual es realizar una división aleatoria, donde por ejemplo podemos hacer uso de un 80% para entrenamiento y validación, y un 20% para test. Dentro del primer grupo, puedes optar de nuevo a una división 80/20 o 90/10.
+---
 
-Una vez conformada la estructura de directorios y distribuidas las imágenes, es necesario crear, en mi caso dentro de la carpeta *data*, un archivo *.yaml* que permite especificar las rutas de las imágenes que se proporcionan para entrenamiento, validación y test, además del número de clases a considerar, y sus nombres. En mi caso con una única clase:
+## 6. Referencias
 
-```
-# TGCRBNW paths
-
-# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
-train: C:/Users/otsed/Desktop/RUNNERS/Datasets/TGC_RBNW/train/
-val: C:/Users/otsed/Desktop/RUNNERS/Datasets/TGC_RBNW/val/  
-test: C:/Users/otsed/Desktop/RUNNERS/Datasets/TGC_RBNW/test/  
-
-# number of classes
-nc: 1
-
-# class names
-names: [ 'bib' ]
-```
-
-A partir de este punto es posible lanzar el entrenamiento. Un par de variantes especificando o no el número de épocas, indicando el tamaño de las imágenes a considerar (por defecto 640), y los pesos tomados como punto de partida:
-
-
-El código para entrenar YOLO desde CPU:
-
-```
-yolo detect train model=yolo11n.pt data=data/miarchivo.yml imgsz=416 batch=4 device=CPU epochs=40
-```
-
-Si disponemos de GPU:
-
-```
-yolo detect train model=yolo11n.pt data=data/miarchivo.yml imgsz=416 batch=4 device=0[,1,2,3] epochs=40
-```
-
-Para entrenar con GPU, recordar que puede serte útil acceder a las instrucciones para [instalar pytorch local](https://pytorch.org/get-started/locally/) de cara a conocer el comando necesario para instalarlo en tu *environment*. Chequea la versión de CUDA en tu equipo, puede que tengas que buscar en el enlace para versiones previas de pytorch.
-
-
-<!--En mi equipo de despacho, donde ya tenía CUDA presente
-
-```
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-
-No fue
-
-conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
-
-se queja de openssl
-
-Con yolov7 usé
-conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6 -c pytorch -c conda-forge
-
-```
-
-
- Error OpenSSL https://github.com/conda/conda/issues/11982
-go to location where you've install anaconda anaconda3>Library>bin. search and copy following dll files
-
-libcrypto-1_1-x64.dll
-libssl-1_1-x64.dll
-
-and paste to anaconda3>DLLs.
-
-then restart your pc.
-
-issue will get resolved. This will solve the issue. Thank you Mahesh2519
--->
-
-El entrenamiento puede llevarse a cabo en CPU, siendo sensiblemente más lento que si contamos con GPU. También es posible hacer uso de Colab  [tutorial para ejecutar en Colab](https://machinelearningprojects.net/train-yolov7-on-the-custom-dataset/).
-Finalizado el entreno localmente, en la carpeta *runs/detect/trainX* se encuentra el resultado. Ya estarías en disposición de probarlo, desde línea de comando o en tu propio código.
-
-Además, una vez finalizado el entrenamiento, se generarán en la carpeta *runs* una serie de gráficas que nos permitirá comprobar que tal ha ido el entrenamiento. Recomendamos, si no tarda demasiado en entrenar cada modelo, realizar el entrenamiento varias veces con uno o varios modelos y después comparar estas métricas para escoger el que mejor comportamiento haya demostrado.
-
-
-## 4.5 RT-DETR
-
-Aunque recomendamos el uso de YOLO y Ultralytics debido a su sencillez y extensivo uso en la literatura, recientes versiones han realizado un cambio que esta motivando la migración de muchas de estas aplicaciones a otros modelos de detección. En los últimos años, ultralytics ha modificado su licencia a AGPL-3.0, significando que si quisieras hacer una aplicación comercial usando sus modelos, deberías o mantener todo el código de tu aplicación en abierto, cosa no siempre posible, o comprar la licencia de pago. Debido a esto, y a la reciente aparición de otras arquitecturas, parte de la industria esta optando por no hacer uso de Ultralytics y migrar a otros modelos, especialmente a RT-DETR. Para más información sobre la licencia pueden acceder a [la página correspondiente de Ultralytics.](https://www.ultralytics.com/es/license)
-
-RT-DETR es un modelo de detección desarrollado por Baidu, una empresa china de tecnología, publicado en 2023 bajo licencia Apache 2.0, permitiendo así un uso comercial. En el [artículo](https://arxiv.org/abs/2304.08069) donde se publica inicialmente, presentan unos resultados donde los modelos de la familia RT-DETR superaban en rendimiento a los de la familia YOLO. En lo relativo a la arquitectura, la mayor diferencia entre ambos es que RT-DETR está construido usando Transformers.
-
-En cuanto a su uso, RT-DETR, se puede entrenar y usar como cualquier otro modelo construido en pytorch, dejamos por aquí el enlace al [Github para su uso](https://github.com/lyuwenyu/RT-DETR). Además, hemos subido el cuaderno *VC_P4_RTDETR.ipynb* con algunos ejemplos mínimos de su uso, incluidos los pasos de descarga de los modelos e instalación. En principio, con añadir al environment de YOLO las siguientes dos librerías debería funcionar todo:
-
-```
-pip install tensorboard
-pip install faster_coco_eval
-```
-
-![RT-DETR](images/rtdetr2l-detection.png)  
-*Resultado del modelo RT-DETR v2-L en la imagen test.jpg*
-
-## 4.6 Entrega
-
-Para la primera entrega de esta práctica, la tarea consiste en desarrollar un prototipo que procese el [vídeo ejemplo proporcionado](https://alumnosulpgc-my.sharepoint.com/:v:/g/personal/mcastrillon_iusiani_ulpgc_es/EXRsnr4YuQ9CrhcekTPAD8YBMHgn16KwlunFg32iZM0xVQ?e=kzuw4l):
-
-- detecte y siga las personas y vehículos presentes
-- detecte las matrículas de los vehículos presentes
-- cuente el total de cada clase
-- vuelque a disco un vídeo que visualice los resultados
-- genere un archivo csv con el resultado de la detección y seguimiento. Se sugiere un formato con al menos los siguientes campos:
-
-```
-fotograma, tipo_objeto, confianza, identificador_tracking, x1, y1, x2, y2, matrícula_en_su_caso, confianza, mx1,my1,mx2,my2, texto_matricula
-```
-
-La **entrega del cuaderno o cuadernos** se hace efectiva a través del campus virtual por medio de un **enlace github**. Además del **archivo README**, debe incluirse el resultado del vídeo proporcionado como test (o enlace al mismo), y el correspondiente archivo *csv*. En el caso de entrenarse algún detector, por ejemplo de matrículas, debe proporcionarse acceso al conjunto de datos y analizar el proceso de entrenamiento (evolución de la función de pérdida, métricas...)
-
-
-Se considerarán extras:
-
-- Determine el flujo de personas y vehículos en el vídeo de test en distintas direcciones (vehículos que dejan la imagen por la derecha, por la izquierda, etc.) (+0.25p)
-- Evaluar dos alternativas para la detección de matrículas: una basada en YOLO y otra en RT-DETR (+1p).
-- Evaluar la detección de matrículas usando técnicas basadas en contornos (+0.25p)
-- Anonimizar a las personas y vehículos presentes en un vídeo (+0.25p).
-
-
-
-
-***
-Bajo licencia de Creative Commons Reconocimiento - No Comercial 4.0 Internacional
+- [Documentación oficial de Ultralytics YOLO11](https://docs.ultralytics.com/)
+- [ Modos de predicción y seguimiento (BoT-SORT / ByteTrack) en Ultralytics](https://docs.ultralytics.com/modes/track/)
+- [Repositorio oficial de RT-DETR / RT-DETRv2 (LyUwenyu / Baidu)](https://github.com/lyuwenyu/RT-DETR)
+- Zhao, Y. et al. (2023). *DETRs Beat YOLOs on Real-time Object Detection (RT-DETR)*. [arXiv:2304.08069](https://arxiv.org/abs/2304.08069)
