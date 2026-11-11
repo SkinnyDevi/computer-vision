@@ -12,6 +12,8 @@ image-dataset
 yolo*
 !yolo_dual_detections.csv
 !yolo_dual_detections_compressed.mp4
+!yolo*.png
+!yolo*.jpg
 
 # RT-DETR excess files
 RT_DETR/
@@ -24,3 +26,7 @@ P4/P4a/runs/detect/runs_plate/plate_detector*/test_eval
 
 !rtdetr_dual_detections.csv
 !rtdetr_dual_detections_compressed.mp4
+!rtdetr*.png
+!rtdetr*.jpg
+
+!P4/P4a/results/*
