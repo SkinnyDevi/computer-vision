@@ -1,0 +1,79 @@
+RTDETRCriterionv2:
+  alpha: 0.75
+  gamma: 2.0
+  losses:
+  - vfl
+  - boxes
+  matcher:
+    alpha: 0.25
+    gamma: 2.0
+    type: HungarianMatcher
+    weight_dict:
+      cost_bbox: 8.5
+      cost_class: 1.5
+      cost_giou: 2
+  weight_dict:
+    loss_bbox: 8.5
+    loss_giou: 2
+    loss_vfl: 1.5
+__include__:
+- /home/skinnydevi/Development/computer-vision/P4/P4a/RT_DETR/rtdetrv2_pytorch/configs/rtdetrv2/rtdetrv2_r18vd_120e_coco.yml
+checkpoint_freq: 10
+criterion: RTDETRCriterionv2
+epoches: 120
+eval_spatial_size:
+- 960
+- 960
+num_classes: 1
+output_dir: /home/skinnydevi/Development/computer-vision/P4/P4a/runs/detect/runs_plate/plate_detector_rtdetr_v2_s_960_BATCH_8
+print_freq: 20
+remap_mscoco_category: false
+train_dataloader:
+  collate_fn:
+    scales: null
+    type: BatchImageCollateFunction
+  dataset:
+    ann_file: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_960/annotations/instances_train.json
+    img_folder: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_960/images
+    return_masks: false
+    transforms:
+      ops:
+      - p: 0.5
+        type: RandomPhotometricDistort
+      - size:
+        - 960
+        - 960
+        type: Resize
+      - type: RandomHorizontalFlip
+      - min_size: 1
+        type: SanitizeBoundingBoxes
+      - dtype: float32
+        scale: true
+        type: ConvertPILImage
+      - fmt: cxcywh
+        normalize: true
+        type: ConvertBoxes
+      type: Compose
+  num_workers: 4
+  shuffle: true
+  total_batch_size: 8
+tuning: /home/skinnydevi/Development/computer-vision/P4/P4a/rtdetr/rtdetrv2_r18vd_120e_coco_rerun_48.1.pth
+use_amp: true
+val_dataloader:
+  dataset:
+    ann_file: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_960/annotations/instances_val.json
+    img_folder: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_960/images
+    return_masks: false
+    transforms:
+      ops:
+      - size:
+        - 960
+        - 960
+        type: Resize
+      - dtype: float32
+        scale: true
+        type: ConvertPILImage
+      type: Compose
+  num_workers: 0
+  shuffle: false
+  total_batch_size: 8
