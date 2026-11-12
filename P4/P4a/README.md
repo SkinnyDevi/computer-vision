@@ -110,10 +110,10 @@ La siguiente tabla resume los resultados obtenidos en validación a lo largo de 
 
 | Experimento YOLOv11 | Modelo base | Resolución (`imgsz`) | Batch | Épocas (Mejor) | Precision (Val) | Recall (Val) | mAP@50 (Val) | mAP@50-95 (Val) |
 | --- | --- | :---: | :---: | :---: | ---: | ---: | ---: | ---: |
-| plate_detector_640_small | YOLOv11s.pt | 640 | 16 | 105 (75) | 87.33 % | 83.89 % | 86.75 % | 49.48 % |
-| plate_detector_640_BATCH_8_small | YOLOv11s.pt | 640 | 8 | 120 (100) | 87.32 % | 76.21 % | 78.25 % | 42.63 % |
-| plate_detector_960_BATCH_8_nano | YOLOv11n.pt | 960 | 8 | 94 (64) | 82.75 % | 75.39 % | 78.40 % | 39.27 % |
-| plate_detector_960_BATCH_16_small | YOLOv11s.pt | 960 | 16 | 120 (120) | 83.37 % | 80.22 % | 81.22 % | 42.86 % |
+| plate_detector_640_small | YOLOv11s.pt | 640 | 16 | 105 (75) | 87.03 % | 69.02 % | 71.65 % | 37.86 % |
+| plate_detector_640_BATCH_8_small | YOLOv11s.pt | 640 | 8 | 120 (100) | 87.01 % | 77.93 % | 80.77 % | 45.44 % |
+| plate_detector_960_BATCH_8_nano | YOLOv11n.pt | 960 | 8 | 94 (64) | 86.44 % | 80.54 % | 81.32 % | 42.91 % |
+| plate_detector_960_BATCH_16_small | YOLOv11s.pt | 960 | 16 | 120 (120) | 85.32 % | 83.45 % | 82.97 % | 44.24 % |
 
 Aunque el modelo a `640` con *batch* `16` obtiene una métrica alta sobre recortes estáticos del conjunto de validación, el modelo **`plate_detector_960_BATCH_16_small`** demostró un comportamiento más sólido al generalizar sobre vídeo completo en alta definición (`1920x1080`) gracias a su mayor resolución de entrada (`960x960`) y a la estabilidad aportada por el `batch = 16` frente a los entrenamientos con `batch = 8` o arquitectura *nano*.
 
@@ -148,6 +148,48 @@ A continuación se muestran las predicciones del modelo sobre 9 imágenes aleato
 ![Predicciones de YOLOv11s sobre muestras del conjunto de test](./images/docs/yolo_detections_960_16.png)
 
 Se observa cómo el modelo localiza con alta precisión matrículas frontales y traseras en condiciones variadas de iluminación (día, sombra y escena nocturna con reflejos en última imagen), así como matrículas parcialmente ocluidas tras una valla metálica (quinta imagen). Incluso en casos como en la cuarta o última imagen, donde el cargador había descartado la anotación original por su tamaño/relación de aspecto (total: 0 | real: 1), el modelo entrenado logra detectar la matrícula correctamente (`detected: 1`).
+
+### 2.4 Evaluación de detecciones en entorno real (vídeo de demostración)
+
+Resultados de detecciones de `plate_detector_960_BATCH_16_small`:
+```
+------------------------------------------------------------
+ TOTAL COUNT OF CONFIRMED UNIQUE OBJECTS:
+------------------------------------------------------------
+  * person         : 27
+  * car            : 166
+  * motorbike      : 3
+  * bus            : 1
+  * license_plate  : 46
+------------------------------------------------------------
+ RAW DETECTIONS PER FRAME:
+  * person         : 3047 total detections
+  * car            : 17813 total detections
+  * motorbike      : 79 total detections
+  * bus            : 217 total detections
+  * license_plate  : 3936 total detections
+============================================================
+```
+
+Resultados de detecciones de `plate_detector_640_small`:
+```
+------------------------------------------------------------
+ TOTAL COUNT OF CONFIRMED UNIQUE OBJECTS:
+------------------------------------------------------------
+  * person         : 28
+  * car            : 169
+  * motorbike      : 3
+  * bus            : 1
+  * license_plate  : 45
+------------------------------------------------------------
+ RAW DETECTIONS PER FRAME:
+  * person         : 3029 total detections
+  * car            : 17874 total detections
+  * motorbike      : 75 total detections
+  * bus            : 217 total detections
+  * license_plate  : 3921 total detections
+============================================================
+```
 
 ---
 
