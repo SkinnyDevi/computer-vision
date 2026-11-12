@@ -5,7 +5,7 @@
 - **Asignatura:** Visión por Computador
 - **Práctica:** P4a (Detección y seguimiento de objetos)
 - **Autor:** Félix Miguel Velásquez
-- **Cuaderno principal (YOLO11):** [`VC_P4_FMV.ipynb`](./VC_P4_FMV.ipynb)
+- **Cuaderno principal (YOLOv11):** [`VC_P4_FMV.ipynb`](./VC_P4_FMV.ipynb)
 - **Cuaderno alternativo (RT-DETRv2):** [`VC_P4_FMV_RTDETR.ipynb`](./VC_P4_FMV_RTDETR.ipynb)
 - **Resultados generados (vídeos y CSV):** [`results/`](./results/)
 
@@ -13,15 +13,15 @@
 
 ## Descripción
 
-Esta primera parte de la Práctica 4 aborda el diseño e implementación de un prototipo completo de procesado de vídeo para la **detección, clasificación, seguimiento (*tracking*) y conteo de vehículos, peatones y matrículas**, integrando tanto arquitecturas convolucionales de la familia **YOLO11** (Ultralytics) como arquitecturas basadas en *Transformers* (**RT-DETRv2**).
+Esta primera parte de la Práctica 4 aborda el diseño e implementación de un prototipo completo de procesado de vídeo para la **detección, clasificación, seguimiento (*tracking*) y conteo de vehículos, peatones y matrículas**, integrando tanto arquitecturas convolucionales de la familia YOLOv11 (Ultralytics) como arquitecturas basadas en Transformers (RT-DETRv2).
 
 En concreto, el trabajo desarrollado cubre los siguientes aspectos:
 
-1. **Verificación, limpieza y particionado de un conjunto de datos de matrículas** (`2406` imágenes y `4371` matrículas anotadas), adaptándolo automáticamente a los formatos **YOLO** y **COCO**.
-2. **Entrenamiento y evaluación de un detector de matrículas propio** mediante *transfer learning* en dos familias de arquitecturas distintas (**YOLO11** y **RT-DETRv2**), analizando el impacto de la resolución de entrada (`640` vs `960` píxeles), el tamaño del lote (*batch size*) y la capacidad del modelo (*nano* vs *small*).
-3. **Procesamiento de vídeo con detección dual y seguimiento multi-objeto**, combinando un detector generalista para vehículos y personas (`person`, `car`, `motorbike`, `bus`) con el detector especialista de matrículas (`license_plate`).
-4. **Gestión de oclusiones de peatones (`PedestrianOcclusionManager`)** mediante correlación de histogramas HSV y proximidad espacial para mantener la identidad de las personas cuando un vehículo cruza por delante.
-5. **Asociación geométrica vehículo-matrícula, estabilización de clase por consenso temporal (moda)**, anonimización/censura mediante desenfoque gaussiano (**extra**), superposición de interfaz gráfica (HUD) en el vídeo de salida y exportación detallada fotograma a fotograma en formato **CSV**.
+1. Verificación, limpieza y particionado de un conjunto de datos de matrículas (2406 imágenes y 4371 matrículas anotadas), adaptándolo automáticamente a los formatos YOLO y COCO.
+2. Entrenamiento y evaluación de un detector de matrículas propio mediante *transfer learning* en dos familias de arquitecturas distintas (YOLOv11 y RT-DETRv2), analizando el impacto de la resolución de entrada (640 vs 960 píxeles), el tamaño del lote (*batch size*) y la capacidad del modelo (*nano* vs *small*).
+3. Procesamiento de vídeo con detección dual y seguimiento multi-objeto, combinando un detector generalista para vehículos y personas (*person, car, motorbike, bus*) con el detector especialista de matrículas (*license_plate*).
+4. Gestión de oclusiones de peatones (`PedestrianOcclusionManager`) mediante correlación de histogramas HSV y proximidad espacial para mantener la identidad de las personas cuando un vehículo cruza por delante.
+5. Asociación geométrica vehículo-matrícula, estabilización de clase por moda, censura mediante desenfoque gaussiano, superposición de interfaz gráfica (HUD) en el vídeo de salida y exportación detallada fotograma a fotograma en formato CSV.
 
 ---
 
@@ -47,25 +47,25 @@ Para la compresión final de los vídeos anotados con el códec H.264 (`libx264`
 
 ## 1. Conjunto de datos y preprocesamiento
 
-Los modelos preentrenados en el conjunto de datos COCO incluyen clases para personas y distintos medios de transporte, pero carecen de una clase específica para **matrículas**. Por ello, se parte de un conjunto de datos colaborativo compuesto por imágenes de vehículos con matrículas españolas y sus correspondientes ficheros JSON de anotación.
+Los modelos preentrenados en el conjunto de datos COCO incluyen clases para personas y distintos medios de transporte, pero carecen de una clase específica para matrículas. Por ello, se parte de un conjunto de datos colaborativo compuesto por imágenes de vehículos con matrículas españolas y sus correspondientes ficheros JSON de anotación.
 
 ### 1.1. Verificación de integridad y limpieza (`LicensePlateDatasetLoader`)
 
-En ambos cuadernos se implementa la clase `LicensePlateDatasetLoader`, encargada de inspeccionar el directorio del conjunto de datos, emparejar cada imagen `.jpg`/`.jpeg` con su archivo `.json` homónimo y aplicar reglas de saneamiento:
+En ambos cuadernos se implementa la clase `LicensePlateDatasetLoader`, encargada de inspeccionar el directorio del conjunto de datos, emparejar cada imagen `.jpg`/`.jpeg` con su archivo `.json` homónimo y aplicar reglas de limpieza de datos:
 
 - **Normalización automática:** si alguna anotación contiene coordenadas expresadas en píxeles absolutos (`> 1.05`), se divide automáticamente por el ancho y alto reales de la imagen (`img_w`, `img_h`).
 - **Recorte a límites válidos (*clipping*):** se garantiza que todas las cajas delimitadoras (`[cx, cy, w, h]`) queden contenidas dentro del rango normalizado `[0.0, 1.0]`.
 - **Filtrado de ruido geométrico:** se descartan anotaciones distorsionadas o excesivamente verticales con una relación de aspecto real `w_px / h_px < 0.95`, así como cajas minúsculas consideradas ruido (`h_px < 6` o `w_px < 12` píxeles).
 
-El informe de integridad obtenido sobre el dataset refleja una correspondencia perfecta `1:1`:
+El informe de integridad obtenido sobre el dataset refleja una correspondencia perfecta 1:1:
 
 | Métrica del conjunto de datos | Valor |
 | --- | ---: |
-| Imágenes totales encontradas | `2406` |
-| Anotaciones JSON totales | `2406` |
-| Muestras emparejadas válidas | `2406` |
-| Imágenes sin anotación o corruptas | `0` |
-| Total de cajas delimitadoras (*bounding boxes*) válidas | `4371` |
+| Imágenes totales encontradas | 2406 |
+| Anotaciones JSON totales | 2406 |
+| Muestras emparejadas válidas | 2406 |
+| Imágenes sin anotación o corruptas | 0 |
+| Total de cajas delimitadoras (*bounding boxes*) válidas | 4371 |
 
 A continuación se muestra una cuadrícula con muestras aleatorias del conjunto de datos y sus cajas anotadas en verde (`SEED = 42`):
 
@@ -73,25 +73,25 @@ A continuación se muestra una cuadrícula con muestras aleatorias del conjunto 
 
 ### 1.2. División en entrenamiento, validación y test
 
-Utilizando una semilla fija (`SEED = 42`) para garantizar la reproducibilidad entre todos los experimentos y arquitecturas, las `2406` imágenes se dividen de forma aleatoria con una proporción **75 % / 15 % / 10 %**:
+Utilizando una semilla fija (`SEED = 42`) para garantizar la reproducibilidad entre todos los experimentos y arquitecturas, las 2406 imágenes se dividen de forma aleatoria con una proporción **75 % / 15 % / 10 %**:
 
 | Subconjunto (*Split*) | Proporción | Imágenes | Matrículas anotadas |
 | --- | ---: | ---: | ---: |
-| **Train** (Entrenamiento) | `74.98 %` | `1804` | `3243` |
-| **Val** (Validación) | `14.96 %` | `360` | `681` |
-| **Test** (Evaluación final) | `10.06 %` | `242` | `447` |
-| **Total** | `100.00 %` | `2406` | `4371` |
+| **Train** (Entrenamiento) | 75.00 % | 1804 | 3243 |
+| **Val** (Validación) | 15.00 % | 360 | 681 |
+| **Test** (Evaluación final) | 10.00 % | 242 | 447 |
+| **Total** | 100.00 % | 2406 | 4371 |
 
-- **Preparación para YOLO (`prepare_yolo_dataset`):** crea la jerarquía `images/{train,val,test}` y `labels/{train,val,test}`, empleando enlaces simbólicos (`os.symlink`) para no duplicar las imágenes en disco, convirtiendo cada etiqueta al formato `<class_id> <cx> <cy> <w> <h>` con `class_id = 0` (`license_plate`) y generando el fichero `data.yaml`.
-- **Preparación para RT-DETR (`prepare_rtdetr_dataset`):** pre-reescala las imágenes en paralelo (`ThreadPoolExecutor`) a la resolución objetivo manteniendo una proporción `16:9` (por ejemplo, `960x540` para `IMGSZ = 960`) para evitar cuellos de botella de lectura/memoria en imágenes de alta resolución, y exporta los ficheros `instances_{train,val,test}.json` con coordenadas absolutas `[x1, y1, width, height]` en formato estándar **COCO**.
+- **Preparación para YOLO (`prepare_yolo_dataset`):** crea la jerarquía `images/{train,val,test}` y `labels/{train,val,test}`, empleando enlaces simbólicos para no duplicar las imágenes en disco, convirtiendo cada etiqueta al formato `<class_id> <cx> <cy> <w> <h>` con `class_id = 0` (`license_plate`) y generando el fichero `data.yaml`.
+- **Preparación para RT-DETR (`prepare_rtdetr_dataset`):** pre-reescala las imágenes en paralelo usando hilos a la resolución objetivo manteniendo una proporción `16:9` (por ejemplo, `960x540` para `IMGSZ = 960`) para evitar cuellos de botella de lectura/memoria en imágenes de alta resolución, y exporta los ficheros `instances_{train,val,test}.json` con coordenadas absolutas `[x1, y1, width, height]` en formato estándar COCO.
 
 ---
 
-## 2. Entrenamiento y evaluación con YOLO11
+## 2. Entrenamiento y evaluación con YOLOv11
 
 ### 2.1. Configuración y experimentos realizados
 
-Las matrículas suelen ocupar una fracción muy pequeña del área total del fotograma, especialmente cuando los vehículos se encuentran alejados. Para maximizar su detección con **YOLO11**, se diseñaron varios experimentos variando el tamaño del modelo (`yolo11n.pt` frente a `yolo11s.pt`), la resolución de entrada (`imgsz = 640` frente a `imgsz = 960`) y el tamaño de lote (`batch = 8` frente a `batch = 16`).
+Las matrículas suelen ocupar una fracción muy pequeña del área total del fotograma, especialmente cuando los vehículos se encuentran alejados. Para maximizar su detección con **YOLOv11**, se diseñaron varios experimentos variando el tamaño del modelo (`YOLOv11n.pt` frente a `YOLOv11s.pt`), la resolución de entrada (`imgsz = 640` frente a `imgsz = 960`) y el tamaño de lote (`batch = 8` frente a `batch = 16`).
 
 En la configuración final seleccionada (`plate_detector_960_BATCH_16_small`) se emplearon los siguientes hiperparámetros clave:
 
@@ -108,56 +108,56 @@ PATIENCE = 30
 
 La siguiente tabla resume los resultados obtenidos en validación a lo largo de las distintas configuraciones exploradas en [`runs/detect/runs_plate/`](./runs/detect/runs_plate/):
 
-| Experimento YOLO11 | Modelo base | Resolución (`imgsz`) | Batch | Épocas (Mejor) | Precision (Val) | Recall (Val) | mAP@50 (Val) | mAP@50-95 (Val) |
+| Experimento YOLOv11 | Modelo base | Resolución (`imgsz`) | Batch | Épocas (Mejor) | Precision (Val) | Recall (Val) | mAP@50 (Val) | mAP@50-95 (Val) |
 | --- | --- | :---: | :---: | :---: | ---: | ---: | ---: | ---: |
-| `plate_detector_640_small` | `yolo11s.pt` | `640` | `16` | `105 (75)` | `87.33 %` | `83.89 %` | `86.75 %` | `49.48 %` |
-| `plate_detector_640_BATCH_8_small` | `yolo11s.pt` | `640` | `8` | `120 (100)` | `87.32 %` | `76.21 %` | `78.25 %` | `42.63 %` |
-| `plate_detector_960_BATCH_8_nano` | `yolo11n.pt` | `960` | `8` | `94 (64)` | `82.75 %` | `75.39 %` | `78.40 %` | `39.27 %` |
-| **`plate_detector_960_BATCH_16_small`** | **`yolo11s.pt`** | **`960`** | **`16`** | **`120 (120)`** | **`83.37 %`** | **`80.22 %`** | **`81.22 %`** | **`42.86 %`** |
+| plate_detector_640_small | YOLOv11s.pt | 640 | 16 | 105 (75) | 87.33 % | 83.89 % | 86.75 % | 49.48 % |
+| plate_detector_640_BATCH_8_small | YOLOv11s.pt | 640 | 8 | 120 (100) | 87.32 % | 76.21 % | 78.25 % | 42.63 % |
+| plate_detector_960_BATCH_8_nano | YOLOv11n.pt | 960 | 8 | 94 (64) | 82.75 % | 75.39 % | 78.40 % | 39.27 % |
+| plate_detector_960_BATCH_16_small | YOLOv11s.pt | 960 | 16 | 120 (120) | 83.37 % | 80.22 % | 81.22 % | 42.86 % |
 
 Aunque el modelo a `640` con *batch* `16` obtiene una métrica alta sobre recortes estáticos del conjunto de validación, el modelo **`plate_detector_960_BATCH_16_small`** demostró un comportamiento más sólido al generalizar sobre vídeo completo en alta definición (`1920x1080`) gracias a su mayor resolución de entrada (`960x960`) y a la estabilidad aportada por el `batch = 16` frente a los entrenamientos con `batch = 8` o arquitectura *nano*.
 
 ### 2.2. Análisis de las gráficas de entrenamiento (plate_detector_960_BATCH_16_small)
 
-![Evolución de pérdidas y métricas durante el entrenamiento de YOLO11s (960, batch 16)](./runs/detect/runs_plate/plate_detector_960_BATCH_16_small/results.png)
+![Evolución de pérdidas y métricas durante el entrenamiento de YOLOv11s (960, batch 16)](./runs/detect/runs_plate/plate_detector_960_BATCH_16_small/results.png)
 
-Analizando las curvas de evolución del entrenamiento (`results.png`):
+Analizando las curvas de evolución del entrenamiento:
 
-- **Funciones de pérdida (`box_loss`, `cls_loss`, `dfl_loss`):** tanto en entrenamiento como en validación muestran un descenso constante y suave a lo largo de las 120 épocas, sin síntomas de *overfitting*. En particular, `val/box_loss` desciende desde `~2.8` hasta estabilizarse en torno a `1.68`, y `val/dfl_loss` baja de `1.85` a `~1.12`, con un pequeño escalón de mejora adicional a partir de la época 100 cuando se desactiva el aumento por mosaico (`close_mosaic = 20`).
+- **Funciones de pérdida (`box_loss`, `cls_loss`, `dfl_loss`):** tanto en entrenamiento como en validación muestran un descenso constante y suave a lo largo de las 120 épocas, sin síntomas de *overfitting*. En particular, `val/box_loss` desciende desde ~2.8 hasta estabilizarse en torno a 1.68, y `val/dfl_loss` baja de 1.85 a ~1.1, con un pequeño escalón de mejora adicional a partir de la época 100 cuando se desactiva el aumento por mosaico (`close_mosaic = 20`).
 - **Evolución de métricas (`precision`, `recall`, `mAP50`, `mAP50-95`):** las curvas crecen rápidamente durante las primeras 35 épocas y continúan mejorando de forma progresiva hasta alcanzar el máximo en la época 120 (`mAP@50 = 81.22 %` en validación).
 
-### 2.3. Evaluación en el conjunto de Test y predicciones visuales (YOLO11s)
+### 2.3. Evaluación en el conjunto de Test y predicciones visuales (plate_detector_960_BATCH_16_small)
 
-Al evaluar los mejores pesos (`best.pt`) sobre las **242 imágenes del conjunto de test** (`447` matrículas) con un umbral IoU de `0.55` para suprimir detecciones duplicadas en objetos pequeños, se obtienen las siguientes métricas finales:
+Al evaluar los mejores pesos (`best.pt`) sobre las 242 imágenes del conjunto de test (447 matrículas) con un umbral IoU de 0.55 para suprimir detecciones duplicadas en objetos pequeños, se obtienen las siguientes métricas finales:
 
-| Métrica (Conjunto de Test — YOLO11s) | Valor |
+| Métrica (Conjunto de Test — YOLOv11s) | Valor |
 | --- | ---: |
-| **Precision (P)** | **85.29 %** (`0.8529`) |
-| **Recall (R)** | **83.45 %** (`0.8345`) |
-| **mAP@50** | **83.11 %** (`0.8311`) |
-| **mAP@50-95** | **44.36 %** (`0.4436`) |
+| Precision (P) | 85.29 % (0.8529) |
+| Recall (R) | 83.45 % (0.8345) |
+| mAP@50 | 83.11 % (0.8311) |
+| mAP@50-95 | 44.36 % (0.4436) |
 
 | Curva Precision-Recall (Test) | Matriz de confusión normalizada (Test) |
 | :---: | :---: |
-| ![Curva PR en Test de YOLO11s](./runs/detect/runs_plate/plate_detector_960_BATCH_16_small/val-3/BoxPR_curve.png) | ![Matriz de confusión normalizada en Test de YOLO11s](./runs/detect/runs_plate/plate_detector_960_BATCH_16_small/val-3/confusion_matrix_normalized.png) |
+| ![Curva PR en Test de YOLOv11s](./runs/detect/runs_plate/plate_detector_960_BATCH_16_small/val-3/BoxPR_curve.png) | ![Matriz de confusión normalizada en Test de YOLOv11s](./runs/detect/runs_plate/plate_detector_960_BATCH_16_small/val-3/confusion_matrix_normalized.png) |
 
-La curva *Precision-Recall* sobre el conjunto de test alcanza un área bajo la curva de **`0.831 mAP50`**, manteniendo una precisión superior al `85 %` para niveles de *recall* de hasta el `80 %`. Asimismo, la matriz de confusión normalizada confirma que el **92 %** de las matrículas reales son detectadas correctamente frente a tan solo un **8 %** de omisiones con el fondo.
+La curva *Precision-Recall* sobre el conjunto de test alcanza un área bajo la curva de **0.831 mAP50**, manteniendo una precisión superior al 85 % para niveles de *recall* de hasta el 80 %. Asimismo, la matriz de confusión normalizada confirma que el **92 %** de las matrículas reales son detectadas correctamente frente a tan solo un **8 %** de omisiones con el fondo.
 
 A continuación se muestran las predicciones del modelo sobre 9 imágenes aleatorias del conjunto de test (`conf_threshold = 0.40`), indicando en el título de cada imagen las matrículas detectadas (`detected`), las válidas tras el filtrado del cargador (`total`) y las anotadas originalmente en bruto (`real`):
 
-![Predicciones de YOLO11s sobre muestras del conjunto de test](./images/docs/yolo_detections_960_16.png)
+![Predicciones de YOLOv11s sobre muestras del conjunto de test](./images/docs/yolo_detections_960_16.png)
 
-Se observa cómo el modelo localiza con alta precisión matrículas frontales y traseras en condiciones variadas de iluminación (día, sombra y escena nocturna con reflejos en `20261031_191042`), así como matrículas parcialmente ocluidas tras una valla metálica (`Test: 1 (25)`). Incluso en casos como `IMG_9227` o `20261031_191042`, donde el cargador había descartado la anotación original por su tamaño/relación de aspecto (`total: 0 | real: 1`), el modelo entrenado logra detectar la matrícula correctamente (`detected: 1`).
+Se observa cómo el modelo localiza con alta precisión matrículas frontales y traseras en condiciones variadas de iluminación (día, sombra y escena nocturna con reflejos en última imagen), así como matrículas parcialmente ocluidas tras una valla metálica (quinta imagen). Incluso en casos como en la cuarta o última imagen, donde el cargador había descartado la anotación original por su tamaño/relación de aspecto (total: 0 | real: 1), el modelo entrenado logra detectar la matrícula correctamente (`detected: 1`).
 
 ---
 
 ## 3. Alternativa basada en Transformers: RT-DETRv2 (Extra)
 
-Como alternativa a la familia YOLO (cuya licencia AGPL-3.0 restringe su integración directa en proyectos cerrados), en el cuaderno [`VC_P4_FMV_RTDETR.ipynb`](./VC_P4_FMV_RTDETR.ipynb) se ha implementado el flujo completo de entrenamiento, evaluación y *tracking* utilizando **RT-DETRv2** (*Real-Time DEtection TRansformer*, licencia Apache 2.0).
+Como alternativa a la familia YOLO (cuya licencia AGPL-3.0 restringe su integración directa en proyectos cerrados), en el cuaderno [`VC_P4_FMV_RTDETR.ipynb`](./VC_P4_FMV_RTDETR.ipynb) se ha implementado el flujo completo de entrenamiento, evaluación y *tracking* utilizando **RT-DETRv2** (*Real-Time DEtection TRansformer*).
 
 ### 3.1. Configuración y entrenamiento de RT-DETRv2-S
 
-Se seleccionó la variante **RT-DETRv2-S** con *backbone* **PResNet18** (`rtdetrv2_r18vd_120e_coco_rerun_48.1.pth`, `~20.08M` parámetros entrenables), adaptando su cabezal de clasificación a `num_classes = 1` (`license_plate`) y entrenando mediante el criterio `RTDETRCriterionv2`, que combina:
+Se seleccionó la variante **RT-DETRv2-S** con *backbone* **PResNet18** (`rtdetrv2_r18vd_120e_coco_rerun_48.1.pth`, ~20.08M parámetros entrenables), adaptando su cabezal de clasificación a `num_classes = 1` (`license_plate`) y entrenando mediante el criterio `RTDETRCriterionv2`, que combina:
 
 - **Varifocal Loss (`loss_vfl`):** con peso `1.5` ($\alpha = 0.75, \gamma = 2.0$).
 - **Pérdida de regresión L1 (`loss_bbox`):** con ganancia `8.5`.
@@ -180,11 +180,11 @@ En las gráficas generadas a partir del registro `log.txt` del entrenamiento (`9
 1. **Curvas de pérdida (*Training Loss per Epoch*):** la pérdida total (incluyendo las pérdidas auxiliares de las capas del decodificador y las ramas de *denoising*) cae drásticamente desde `~25.3` en la primera época hasta `~3.6` en la época 120, mientras que las pérdidas individuales `VFL`, `Bbox` y `GIoU` convergen de manera estable por debajo de `0.5`.
 2. **Curvas de validación (`mAP` y `mAR`):** el modelo alcanza más de un `80 %` de `mAP@50` apenas en la época 12 y continúa refinando la localización estricta (`mAP@75` y `mAP@50-95`) hasta estabilizarse en torno al `85.0 %` de `mAP@50` y `51.3 %` de `mAP@50-95`.
 
-### 3.2. Evaluación en el conjunto de Test y comparativa frente a YOLO11s
+### 3.2. Evaluación en el conjunto de Test y comparativa frente a YOLOv11s
 
 Al evaluar el mejor *checkpoint* de **RT-DETRv2-S** (`best.pth`) sobre el mismo conjunto de test (`242` imágenes, `447` matrículas) mediante el evaluador oficial COCO (`faster_coco_eval`), se obtienen los siguientes resultados:
 
-| Métrica en Conjunto de Test | YOLO11s (`960`, `batch=16`) | RT-DETRv2-S (`960`, `batch=8`) |
+| Métrica en Conjunto de Test | YOLOv11s (`960`, `batch=16`) | RT-DETRv2-S (`960`, `batch=8`) |
 | --- | ---: | ---: |
 | **mAP@50** | `83.11 %` | **86.53 %** |
 | **mAP@75** | — | **55.78 %** |
@@ -192,11 +192,11 @@ Al evaluar el mejor *checkpoint* de **RT-DETRv2-S** (`best.pth`) sobre el mismo 
 | **Recall / AR@50** | `83.45 %` | **94.00 %** (`AR@100: 65.21 %`) |
 
 - **Desglose por escala en RT-DETRv2-S (Test):** el evaluador COCO reporta un `mAP@50-95` de `43.7 %` en matrículas pequeñas (*small*), `64.3 %` en medianas (*medium*) y `73.6 %` en grandes (*large*).
-- **Comparación directa:** **RT-DETRv2-S** supera a **YOLO11s** tanto en `mAP@50` (`86.53 %` vs `83.11 %`) como especialmente en **`mAP@50-95` (`53.10 %` vs `44.36 %`, +8.74 puntos)**, lo que indica que las cajas determinadas por el *Transformer* se ajustan con mayor exactitud espacial a los contornos reales de las matrículas.
+- **Comparación directa:** **RT-DETRv2-S** supera a **YOLOv11s** tanto en `mAP@50` (`86.53 %` vs `83.11 %`) como especialmente en **`mAP@50-95` (`53.10 %` vs `44.36 %`, +8.74 puntos)**, lo que indica que las cajas determinadas por el *Transformer* se ajustan con mayor exactitud espacial a los contornos reales de las matrículas.
 
 ![Predicciones de RT-DETRv2-S sobre las mismas muestras del conjunto de test](./images/docs/rtdetr_detections_960_8.png)
 
-Comparando visualmente las predicciones de **RT-DETRv2-S** con las de **YOLO11s** sobre las mismas 9 imágenes de test (`SEED = 42`), se aprecia que RT-DETRv2-S asigna puntuaciones de confianza más altas y definidas en la mayoría de los vehículos (por ejemplo, `0.96` frente a `0.83` en el primer coche, o `0.85` frente a `0.49` en la imagen inferior izquierda).
+Comparando visualmente las predicciones de **RT-DETRv2-S** con las de **YOLOv11s** sobre las mismas 9 imágenes de test (`SEED = 42`), se aprecia que RT-DETRv2-S asigna puntuaciones de confianza más altas y definidas en la mayoría de los vehículos (por ejemplo, `0.96` frente a `0.83` en el primer coche, o `0.85` frente a `0.49` en la imagen inferior izquierda).
 
 Cabe destacar que, a efectos teóricos, RT-DETRv2 obtiene mejores resultados frente a YOLOv11s. Está comparativa no se traslada al completo a la práctica. En el caso de la imágen 2, podemos ver como RT-DETRv2 a hecho una detección adicional innecesaria, confundiendo el texto de anuncio de la furgoneta blanca con su matrícula. Aún teniendo estos defectos prácticos, ambos modelos han presentado mejoras de reconocimiento, detectando matrículas en las imágenes de test, las cuales no fueron anotadas, pero se podrían reconocer como un acierto por el modelo.
 
@@ -211,9 +211,9 @@ Para procesar el vídeo de prueba (`plate_test_video.mp4`, de `2832` fotogramas 
 En cada fotograma se ejecutan dos modelos en paralelo con un umbral de confianza `CONFIDENCE_THRESHOLD = 0.35`:
 
 1. **Detector y *tracker* de vehículos y peatones:** filtra exclusivamente las clases de interés del estándar COCO (`0: person`, `2: car`, `3: motorbike`, `5: bus`).
-   - En el cuaderno **YOLO11**, se utiliza `yolo11n.pt` integrado con el algoritmo **BoT-SORT** (`yolo_tracker_file.yaml`), configurado con compensación de movimiento global por flujo óptico disperso (`gmc_method: sparseOptFlow`), fusión de puntuación de confianza (`fuse_score: True`) y un búfer de memoria de `track_buffer: 90` fotogramas.
+   - En el cuaderno **YOLOv11**, se utiliza `YOLOv11n.pt` integrado con el algoritmo **BoT-SORT** (`yolo_tracker_file.yaml`), configurado con compensación de movimiento global por flujo óptico disperso (`gmc_method: sparseOptFlow`), fusión de puntuación de confianza (`fuse_score: True`) y un búfer de memoria de `track_buffer: 90` fotogramas.
    - En el cuaderno **RT-DETR**, se implementa desde cero la clase `RTDETRTracker` dentro de `RTDETRPredictor`, que mantiene las trayectorias activas asociando las detecciones entre fotogramas consecutivos mediante matrices de **IoU** y asignación óptima con el **algoritmo húngaro** (`scipy.optimize.linear_sum_assignment`), conservando pistas perdidas hasta `max_lost_frames = 45`.
-2. **Detector especialista de matrículas:** aplica el modelo entrenado (`best.pt` en YOLO11s o `best.pth` en RT-DETRv2-S) sobre cada fotograma y asocia cada matrícula detectada a su vehículo correspondiente mediante `plate_belongs_to_vehicle()`, comprobando si el centro de la matrícula cae dentro del *bounding box* del vehículo o si la intersección supera el **50 %** del área de la matrícula. Si una matrícula no puede vincularse a ningún vehículo en ese instante, se registra como `orphan_plate`.
+2. **Detector especialista de matrículas:** aplica el modelo entrenado (`best.pt` en YOLOv11s o `best.pth` en RT-DETRv2-S) sobre cada fotograma y asocia cada matrícula detectada a su vehículo correspondiente mediante `plate_belongs_to_vehicle()`, comprobando si el centro de la matrícula cae dentro del *bounding box* del vehículo o si la intersección supera el **50 %** del área de la matrícula. Si una matrícula no puede vincularse a ningún vehículo en ese instante, se registra como `orphan_plate`.
 
 ### 4.2. Gestión de oclusiones de peatones (`PedestrianOcclusionManager`)
 
@@ -242,7 +242,7 @@ Con el parámetro `APPLY_CENSORING = True`, el procesador aplica automáticament
 
 Tanto el vídeo anotado (con cajas **azules/cian** para vehículos, **naranjas** para peatones, **verdes** para matrículas y barra superior **HUD** con el recuento acumulado en vivo) como el fichero CSV se han generado con ambas arquitecturas en la carpeta [`results/`](./results/):
 
-- **Pipeline YOLO11 (`yolo11n.pt` + `yolo11s` matrículas):**
+- **Pipeline YOLOv11 (`YOLOv11n.pt` + `YOLOv11s` matrículas):**
   - Vídeo comprimido: [`results/yolo_dual_detections_compressed.mp4`](./results/yolo_dual_detections_compressed.mp4)
   - Registro CSV: [`results/yolo_dual_detections.csv`](./results/yolo_dual_detections.csv)
 - **Pipeline RT-DETRv2 (`RT-DETRv2-S` vehículos + `RT-DETRv2-S` matrículas):**
@@ -251,7 +251,7 @@ Tanto el vídeo anotado (con cajas **azules/cian** para vehículos, **naranjas**
 
 La siguiente tabla compara el recuento total de **objetos únicos confirmados** (`>= 5` fotogramas) y el total de **detecciones brutas acumuladas** a lo largo de los `2832` fotogramas del vídeo:
 
-| Clase de objeto | Objetos únicos (YOLO11) | Detecciones brutas (YOLO11) | Objetos únicos (RT-DETRv2) | Detecciones brutas (RT-DETRv2) |
+| Clase de objeto | Objetos únicos (YOLOv11) | Detecciones brutas (YOLOv11) | Objetos únicos (RT-DETRv2) | Detecciones brutas (RT-DETRv2) |
 | --- | ---: | ---: | ---: | ---: |
 | **Personas (`person`)** | `27` | `3047` | `77` | `8862` |
 | **Coches (`car`)** | `166` | `17813` | `310` | `30998` |
@@ -259,10 +259,10 @@ La siguiente tabla compara el recuento total de **objetos únicos confirmados** 
 | **Autobuses (`bus`)** | `1` | `217` | `6` | `686` |
 | **Matrículas confirmadas (`license_plate`)** | `46` | `3936` | `58` | `2734` |
 
-#### Comparación del comportamiento en vídeo (YOLO11 vs RT-DETRv2)
+#### Comparación del comportamiento en vídeo (YOLOv11 vs RT-DETRv2)
 
-1. **Sensibilidad a objetos lejanos vs estabilidad de seguimiento:** el detector generalista **RT-DETRv2-S** es notablemente más sensible que `yolo11n.pt` ante vehículos aparcados al fondo y peatones lejanos, generando casi el doble de detecciones por fotograma (`30998` vs `17813` en coches). Sin embargo, al emplear un *tracker* basado únicamente en IoU + algoritmo húngaro frente a **BoT-SORT** (que integra filtro de Kalman y compensación de movimiento óptico `sparseOptFlow`), las pequeñas interrupciones en objetos lejanos producen una mayor fragmentación de trayectorias en RT-DETR (`310` IDs de coches frente a `166` en YOLO11).
-2. **Detección de matrículas asociadas a vehículos:** mientras que **YOLO11s** acumula más detecciones brutas por fotograma (`3936`), **RT-DETRv2-S** consigue confirmar matrículas en un mayor número de vehículos distintos a lo largo del vídeo (**`58` vehículos con matrícula confirmada frente a `46`**), en consonancia con el mayor `mAP@50` (`86.53 %`) y `mAP@50-95` (`53.10 %`) observado en el conjunto de test.
+1. **Sensibilidad a objetos lejanos vs estabilidad de seguimiento:** el detector generalista **RT-DETRv2-S** es notablemente más sensible que `YOLOv11n.pt` ante vehículos aparcados al fondo y peatones lejanos, generando casi el doble de detecciones por fotograma (`30998` vs `17813` en coches). Sin embargo, al emplear un *tracker* basado únicamente en IoU + algoritmo húngaro frente a **BoT-SORT** (que integra filtro de Kalman y compensación de movimiento óptico `sparseOptFlow`), las pequeñas interrupciones en objetos lejanos producen una mayor fragmentación de trayectorias en RT-DETR (`310` IDs de coches frente a `166` en YOLOv11).
+2. **Detección de matrículas asociadas a vehículos:** mientras que **YOLOv11s** acumula más detecciones brutas por fotograma (`3936`), **RT-DETRv2-S** consigue confirmar matrículas en un mayor número de vehículos distintos a lo largo del vídeo (**`58` vehículos con matrícula confirmada frente a `46`**), en consonancia con el mayor `mAP@50` (`86.53 %`) y `mAP@50-95` (`53.10 %`) observado en el conjunto de test.
 
 #### Estructura del archivo CSV
 
@@ -288,7 +288,7 @@ fotograma,tipo_objeto,confianza,identificador_tracking,x1,y1,x2,y2,matrícula_en
 
 ## 6. Referencias
 
-- [Documentación oficial de Ultralytics YOLO11](https://docs.ultralytics.com/)
+- [Documentación oficial de Ultralytics YOLOv11](https://docs.ultralytics.com/)
 - [ Modos de predicción y seguimiento (BoT-SORT / ByteTrack) en Ultralytics](https://docs.ultralytics.com/modes/track/)
 - [Repositorio oficial de RT-DETR / RT-DETRv2 (LyUwenyu / Baidu)](https://github.com/lyuwenyu/RT-DETR)
 - Zhao, Y. et al. (2023). *DETRs Beat YOLOs on Real-time Object Detection (RT-DETR)*. [arXiv:2304.08069](https://arxiv.org/abs/2304.08069)
