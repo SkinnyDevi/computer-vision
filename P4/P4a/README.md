@@ -358,8 +358,9 @@ Podemos observar la mejoria de precision de YOLOv11s sobre RT-DETRv2-S en alguna
 
 Para procesar el vídeo de prueba (`plate_test_video.mp4`, de 2832 fotogramas a 25 FPS, duración 01:53), se ha diseñado la clase modular `LicensePlateVideoProcessor`, que coordina en cada fotograma la detección dual, el seguimiento multi-objeto, la resolución de oclusiones de personas, la anonimización y el registro de resultados.
 
-![video_detections_yolo_960_batch_16_small](https://github.com/user-attachments/assets/814c43b0-95b3-4709-882b-6b69d4e9810e)
-![video_detections_rtdetr_960_batch_8_small](https://github.com/user-attachments/assets/55b4c5d6-dec5-4f3b-85b2-f2e66e9a018e)
+https://github.com/user-attachments/assets/814c43b0-95b3-4709-882b-6b69d4e9810e
+
+https://github.com/user-attachments/assets/55b4c5d6-dec5-4f3b-85b2-f2e66e9a018e
 
 ### 4.1. Arquitectura dual de detección y *tracking*
 
