@@ -4,16 +4,17 @@
 
 - **Asignatura:** Visión por Computador
 - **Práctica:** P4a (Detección y seguimiento de objetos)
-- **Autor:** Félix Miguel Velásquez
+- **Autor:** Félix Miguel Velásquez y Cristina Santana Martín
 - **Cuaderno principal (YOLOv11):** [`VC_P4_FMV.ipynb`](./VC_P4_FMV.ipynb)
 - **Cuaderno alternativo (RT-DETRv2):** [`VC_P4_FMV_RTDETR.ipynb`](./VC_P4_FMV_RTDETR.ipynb)
 - **Resultados generados (vídeos y CSV):** [`results/`](./results/)
+- **Dataset creado y utilizado**: [ULPGC 26/27 VC Plate Detection Dataset](https://drive.google.com/drive/u/1/folders/1RFd6sKH_QMQcpE_w5rWmy8rKiYUY5_SI)
 
 ---
 
 ## Descripción
 
-Esta primera parte de la Práctica 4 aborda el diseño e implementación de un prototipo completo de procesado de vídeo para la **detección, clasificación, seguimiento (*tracking*) y conteo de vehículos, peatones y matrículas**, integrando tanto arquitecturas convolucionales de la familia YOLOv11 (Ultralytics) como arquitecturas basadas en Transformers (RT-DETRv2).
+Esta primera parte de la Práctica 4 aborda el diseño e implementación del procesado de vídeo para la **detección, clasificación, seguimiento (*tracking*) y conteo de vehículos, peatones y matrículas**, integrando tanto arquitecturas convolucionales de la familia YOLOv11 (Ultralytics) como arquitecturas basadas en Transformers (RT-DETRv2).
 
 En concreto, el trabajo desarrollado cubre los siguientes aspectos:
 
@@ -47,7 +48,7 @@ Para la compresión final de los vídeos anotados con el códec H.264 (`libx264`
 
 ## 1. Conjunto de datos y preprocesamiento
 
-Los modelos preentrenados en el conjunto de datos COCO incluyen clases para personas y distintos medios de transporte, pero carecen de una clase específica para matrículas. Por ello, se parte de un conjunto de datos colaborativo compuesto por imágenes de vehículos con matrículas españolas y sus correspondientes ficheros JSON de anotación.
+Los modelos preentrenados en el conjunto de datos COCO incluyen clases para personas y distintos medios de transporte, pero carecen de una clase específica para matrículas. Por ello, se parte de un [conjunto de datos colaborativo](https://drive.google.com/drive/u/1/folders/1RFd6sKH_QMQcpE_w5rWmy8rKiYUY5_SI) compuesto por imágenes de vehículos con matrículas españolas y sus correspondientes ficheros JSON de anotación.
 
 ### 1.1. Verificación de integridad y limpieza (`LicensePlateDatasetLoader`)
 
@@ -110,10 +111,10 @@ La siguiente tabla resume los resultados obtenidos en validación a lo largo de 
 
 | Experimento YOLOv11 | Modelo base | Resolución (`imgsz`) | Batch | Épocas (Mejor) | Precision (Val) | Recall (Val) | mAP@50 (Val) | mAP@50-95 (Val) |
 | --- | --- | :---: | :---: | :---: | ---: | ---: | ---: | ---: |
-| plate_detector_640_small | YOLOv11s.pt | 640 | 16 | 105 (75) | 87.03 % | 69.02 % | 71.65 % | 37.86 % |
-| plate_detector_640_BATCH_8_small | YOLOv11s.pt | 640 | 8 | 120 (100) | 87.01 % | 77.93 % | 80.77 % | 45.44 % |
+| plate_detector_640_small | YOLOv11s.pt | 640 | 16 | 105 (75) | **87.03 %** | 69.02 % | 71.65 % | 37.86 % |
+| plate_detector_640_BATCH_8_small | YOLOv11s.pt | 640 | 8 | 120 (100) | 87.01 % | 77.93 % | 80.77 % | **45.44 %** |
 | plate_detector_960_BATCH_8_nano | YOLOv11n.pt | 960 | 8 | 94 (64) | 86.44 % | 80.54 % | 81.32 % | 42.91 % |
-| plate_detector_960_BATCH_16_small | YOLOv11s.pt | 960 | 16 | 120 (120) | 85.32 % | 83.45 % | 82.97 % | 44.24 % |
+| plate_detector_960_BATCH_16_small | YOLOv11s.pt | 960 | 16 | 120 (120) | 85.32 % | **83.45 %** | **82.97 %** | 44.24 % |
 
 Aunque el modelo a `640` con *batch* `16` obtiene una métrica alta sobre recortes estáticos del conjunto de validación, el modelo **`plate_detector_960_BATCH_16_small`** demostró un comportamiento más sólido al generalizar sobre vídeo completo en alta definición (`1920x1080`) gracias a su mayor resolución de entrada (`960x960`) y a la estabilidad aportada por el `batch = 16` frente a los entrenamientos con `batch = 8` o arquitectura *nano*.
 
