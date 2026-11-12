@@ -13,7 +13,7 @@ yolo*
 !yolo_dual_detections_compressed.mp4
 !yolo*.png
 !yolo*.jpg
-!yolo_dual_detections_ocr_plates.mp4
+!yolo_dual_detections_ocr_plates_compressed.mp4
 !yolo_dual_detections_ocr_plates.csv
 
 # RT-DETR excess files
