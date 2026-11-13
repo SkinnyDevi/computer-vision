@@ -1,7 +1,29 @@
+RTDETRCriterionv2:
+  alpha: 0.75
+  gamma: 2.0
+  losses:
+  - vfl
+  - boxes
+  matcher:
+    alpha: 0.25
+    gamma: 2.0
+    type: HungarianMatcher
+    weight_dict:
+      cost_bbox: 8.5
+      cost_class: 1.5
+      cost_giou: 2
+  weight_dict:
+    loss_bbox: 8.5
+    loss_giou: 2
+    loss_vfl: 1.5
 __include__:
 - /home/skinnydevi/Development/computer-vision/P4/P4a/RT_DETR/rtdetrv2_pytorch/configs/rtdetrv2/rtdetrv2_r18vd_120e_coco.yml
 checkpoint_freq: 10
-epoches: 60
+criterion: RTDETRCriterionv2
+epoches: 120
+eval_spatial_size:
+- 640
+- 640
 num_classes: 1
 output_dir: /home/skinnydevi/Development/computer-vision/P4/P4a/runs/detect/runs_plate/plate_detector_rtdetr_v2_s_640_BATCH_16
 print_freq: 20
@@ -11,8 +33,8 @@ train_dataloader:
     scales: null
     type: BatchImageCollateFunction
   dataset:
-    ann_file: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training/annotations/instances_train.json
-    img_folder: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training/image
+    ann_file: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_640/annotations/instances_train.json
+    img_folder: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_640/images
     return_masks: false
     transforms:
       ops:
@@ -39,8 +61,8 @@ tuning: /home/skinnydevi/Development/computer-vision/P4/P4a/rtdetr/rtdetrv2_r18v
 use_amp: true
 val_dataloader:
   dataset:
-    ann_file: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training/annotations/instances_val.json
-    img_folder: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training/image
+    ann_file: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_640/annotations/instances_val.json
+    img_folder: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_640/images
     return_masks: false
     transforms:
       ops:

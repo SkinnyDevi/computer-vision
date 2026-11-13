@@ -3,8 +3,8 @@ __include__:
 output_dir: /home/skinnydevi/Development/computer-vision/P4/P4a/runs/detect/runs_plate/plate_detector_rtdetr_v2_s_640_BATCH_16/test_eval
 val_dataloader:
   dataset:
-    ann_file: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training/annotations/instances_test.json
-    img_folder: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training/image
+    ann_file: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_640/annotations/instances_test.json
+    img_folder: /home/skinnydevi/Development/computer-vision/image-dataset/prac4VC_dataset/rtdetr-training_640/images
   num_workers: 2
   shuffle: false
   total_batch_size: 16
