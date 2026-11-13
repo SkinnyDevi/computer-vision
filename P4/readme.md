@@ -14,11 +14,9 @@ Esta práctica aborda el desarrollo completo de un sistema de análisis de tráf
 
 Cada subproyecto cuenta con su propia documentación detallada:
 
-| Parte | Documentación |
-| --- | --- |
-| **P4a** |  [`P4a/README.md`](./P4a/README.md) |
-| **P4b** |  [`P4b/README.md`](./P4b/README.md) |
-
+- **[Práctica 4a: Detección y Reconocimiento de Matrículas](./P4a)**
+- **[Práctica 4b: Reconocimiento de Carácteres y Evaluación de Tecnologías](./P4b)**
+- **Dataset creado y utilizado**: [ULPGC 26/27 VC Plate Detection Dataset](https://drive.google.com/drive/u/1/folders/1RFd6sKH_QMQcpE_w5rWmy8rKiYUY5_SI)
 
 ---
 
@@ -27,15 +25,21 @@ Cada subproyecto cuenta con su propia documentación detallada:
 ### Parte A — Detección y seguimiento de vehículos, personas y matrículas (`P4a`)
 
 - **Objetivo:** Detectar y seguir vehículos (*car, motorbike, bus*), peatones (*person*) y matrículas (*license_plate*) en vídeo, asociar cada matrícula a su vehículo, gestionar oclusiones y exportar estadísticas fotograma a fotograma.
+
 - **Conjunto de datos:** 2406 imágenes y 4371 matrículas anotadas, verificadas y divididas con `SEED = 42` en Train (75 %), Val (15 %) y Test (10 %) para formatos YOLO y COCO.
+
 - **Modelos:** Entrenamiento mediante *transfer learning* de **YOLOv11** (`VC_P4_FMV.ipynb`, mejor configuración `plate_detector_960_BATCH_16_small` con mAP@50 de 82.97 % en validación) y **RT-DETRv2** (`VC_P4_FMV_RTDETR.ipynb`).
+
 - **Pipeline de vídeo:** Detección dual (detector generalista COCO + detector propio de matrículas), `PedestrianOcclusionManager` basado en histogramas HSV y proximidad espacial, estabilización de clase por moda, censura de matrículas con desenfoque gaussiano, HUD informativo y volcado a CSV/MP4 en [`P4a/results/`](./P4a/results/).
+
 - **Cuadernos principales:** [`P4a/VC_P4_FMV.ipynb`](./P4a/VC_P4_FMV.ipynb) y [`P4a/VC_P4_FMV_RTDETR.ipynb`](./P4a/VC_P4_FMV_RTDETR.ipynb).
 
 ### Parte B — Reconocimiento de caracteres en matrículas (`P4b`)
 
 - **Objetivo:** Ampliar el detector de la Parte A para extraer el texto alfanumérico de cada matrícula detectada, mostrarlo en el vídeo de salida, almacenarlo en el CSV y comparar el rendimiento entre OCR clásicos y VLMs.
+
 - **Integración en vídeo:** El cuaderno [`P4b/VC_P4B_CSM_FMV.ipynb`](./P4b/VC_P4B_CSM_FMV.ipynb) añade la lectura de matrículas al flujo de detección y genera los resultados en [`P4b/results/`](./P4b/results/) (`yolo_dual_detections_ocr_plates.csv` y vídeo anotado).
+
 - **Comparativa OCR vs. VLM:** El cuaderno [`P4b/VC_P4B_CSM_FMV_comparative.ipynb`](./P4b/VC_P4B_CSM_FMV_comparative.ipynb) evalúa **EasyOCR**, **PaddleOCR** (ejecutado en proceso independiente mediante [`P4b/paddle_ocr_worker.py`](./P4b/paddle_ocr_worker.py) para evitar conflictos de librerías nativas con PyTorch) y **SmolVLM** (`HuggingFaceTB/SmolVLM-Instruct`) sobre 79 recortes de 50 imágenes (`SEED = 42`).
   - **SmolVLM** logra la mayor tasa de acierto exacto (**62.03 %**, 461.24 ms OCR).
   - **PaddleOCR** obtiene una precisión muy cercana (**59.49 %**, 377.73 ms OCR en CPU) sin consumir VRAM.
