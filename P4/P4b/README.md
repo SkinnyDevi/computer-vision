@@ -136,7 +136,11 @@ xychart-beta
     bar [54.92, 105.58, 604.58]
 ```
 
-### 2.3. Coincidencias entre modelos
+#### Muestras visuales de lectura por modelo
+
+![Comparativa visual de lecturas OCR sobre muestras de matrícula](./images/comparativa_ocr_muestras.png)
+
+### Coincidencias entre modelos
 
 | Situación | Recortes |
 | --- | ---: |
@@ -147,7 +151,7 @@ xychart-beta
 | Solo acierta PaddleOCR | 13 |
 | Solo acierta SmolVLM | 60 |
 
-### 2.4. Conclusiones y recomendación
+### 2.3. Conclusiones y recomendación
 
 1. **Precisión:** **SmolVLM** lidera claramente la comparativa con un **71.22 %** de acierto exacto (297/417) y **83.75 %** de similitud media, además de registrar solo 2 predicciones vacías. **PaddleOCR** alcanza un **49.16 %** (75.45 % de similitud), mientras que **EasyOCR** se queda en un **32.61 %** (63.81 % de similitud).
 2. **Velocidad:** **EasyOCR** sigue siendo el más rápido (**30.59 ms** de inferencia OCR y **54.92 ms** totales, ≈ 18 fps), seguido de **PaddleOCR** en GPU (**81.25 ms** OCR y **105.58 ms** totales, ≈ 9.5 fps), que reduce en más de 4× su tiempo respecto a CPU. **SmolVLM** es el más costoso (**580.25 ms** OCR, **604.58 ms** totales).
@@ -161,7 +165,7 @@ xychart-beta
 
 
 
-### 2.5. Limitaciones del experimento
+### 2.4. Limitaciones del experimento
 
 - El preprocesado común (escala de grises + desenfoque) no tiene por qué ser óptimo para todos los motores.
 - En el análisis de resultados, 2 de los 417 registros corresponden a imágenes donde YOLO no detectó ninguna matrícula (`recorte is None`), contando como fallo para todos los modelos.
