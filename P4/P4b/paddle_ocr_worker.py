@@ -20,9 +20,15 @@ from pathlib import Path
 os.environ.setdefault("FLAGS_use_mkldnn", "0")
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 
+from paddleocr import PaddleOCR
+import paddle
+
+def gpu_disponible():
+    """Devuelve True si PaddlePaddle fue compilado con soporte CUDA."""
+    return paddle.device.is_compiled_with_cuda()
 
 def crear_lector(lang, usar_gpu):
-    from paddleocr import PaddleOCR
+    print("PaddleOCR usando GPU" if gpu_disponible() else "PaddleOCR usando CPU (version de paddle no fue compilada para CUDA)")
 
     try:
         # PaddleOCR 3.x
@@ -33,6 +39,9 @@ def crear_lector(lang, usar_gpu):
             use_doc_unwarping=False,
             use_textline_orientation=False,
             enable_mkldnn=False,
+            # text_recognition_batch_size=1,
+            # textline_orientation_batch_size=1,
+            text_det_limit_side_len=640,
         )
     except (TypeError, ValueError):
         # PaddleOCR 2.x
@@ -77,6 +86,42 @@ def extraer_textos(resultado):
     return textos
 
 
+def run_ocr(carpeta, salida, lang="es", gpu=False):
+    lector = crear_lector(lang, gpu)
+    usa_predict = hasattr(lector, "predict")
+    gpu_available = gpu_disponible()
+
+    import cv2
+
+    imagenes = sorted(Path(carpeta).glob("*.png"))
+
+    # Calentamiento para no penalizar la primera inferencia.
+    if imagenes:
+        img = cv2.imread(str(imagenes[0]))
+        lector.predict(img) if usa_predict else lector.ocr(img, cls=False)
+
+    resultados = {}
+    for i, ruta in enumerate(imagenes, start=1):
+        img = cv2.imread(str(ruta))
+        t0 = time.perf_counter()
+        salida_ocr = lector.predict(img) if usa_predict else lector.ocr(img, cls=False)
+        t_ocr = time.perf_counter() - t0
+        resultados[ruta.stem] = {
+            "textos": [str(t) for t in extraer_textos(salida_ocr)],
+            "tiempo_ocr_s": t_ocr,
+        }
+        
+        print(f"Procesado {i}/{len(imagenes)}", end="\r")
+        if i % 10 == 0 and gpu_available:
+            paddle.device.cuda.empty_cache()
+            print(f"GPU cache limpiada tras procesar {i} imágenes.")
+
+    with open(salida, "w", encoding="utf-8") as f:
+        json.dump(resultados, f, ensure_ascii=False, indent=2)
+    print(f"PaddleOCR procesó {len(resultados)} recortes.", file=sys.stderr)
+    paddle.device.cuda.empty_cache()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("carpeta")
@@ -85,32 +130,11 @@ def main():
     parser.add_argument("--gpu", action="store_true")
     args = parser.parse_args()
 
-    import cv2
-
-    lector = crear_lector(args.lang, args.gpu)
-    usa_predict = hasattr(lector, "predict")
-
-    imagenes = sorted(Path(args.carpeta).glob("*.png"))
-
-    # Calentamiento para no penalizar la primera inferencia.
-    if imagenes:
-        img = cv2.imread(str(imagenes[0]))
-        lector.predict(img) if usa_predict else lector.ocr(img, cls=False)
-
-    resultados = {}
-    for ruta in imagenes:
-        img = cv2.imread(str(ruta))
-        t0 = time.perf_counter()
-        salida = lector.predict(img) if usa_predict else lector.ocr(img, cls=False)
-        t_ocr = time.perf_counter() - t0
-        resultados[ruta.stem] = {
-            "textos": [str(t) for t in extraer_textos(salida)],
-            "tiempo_ocr_s": t_ocr,
-        }
-
-    with open(args.salida, "w", encoding="utf-8") as f:
-        json.dump(resultados, f, ensure_ascii=False, indent=2)
-    print(f"PaddleOCR procesó {len(resultados)} recortes.", file=sys.stderr)
+    try:
+        run_ocr(args.carpeta, args.salida, lang=args.lang, gpu=args.gpu)
+    except Exception as e:
+        print(f"Error al ejecutar PaddleOCR: {e}", file=sys.stderr)
+        sys.exit(0)
 
 
 if __name__ == "__main__":
