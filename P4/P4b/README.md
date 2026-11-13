@@ -19,8 +19,9 @@ Esta segunda parte de la Práctica 4 amplía el sistema de detección y seguimie
 
 El trabajo desarrollado cubre dos bloques principales:
 
-1. **Integración de lectura de matrículas en vídeo:** Incorporación de la clase `LicensePlateOCR` al pipeline `LicensePlateVideoProcessor` (con soporte para **SmolVLM** y **EasyOCR**), mostrando el texto leído sobre el vídeo anotado y añadiendo la columna `texto_matricula` al archivo CSV fotograma a fotograma.
-2. **Comparativa experimental entre OCR clásicos y VLMs:** Evaluación reproducible (`SEED = 42`) sobre los mismos recortes de matrícula detectados por YOLO comparando **EasyOCR**, **PaddleOCR** y **SmolVLM** en tasa de acierto exacto, similitud de caracteres y tiempo de inferencia.
+1. **Integración de lectura de matrículas en vídeo:** Incorporación de la clase `LicensePlateOCR` al pipeline `LicensePlateVideoProcessor` (con soporte para SmolVLM y EasyOCR), mostrando el texto leído sobre el vídeo anotado y añadiendo la columna `texto_matricula` al archivo CSV fotograma a fotograma.
+
+2. **Comparativa experimental entre OCR clásicos y VLMs:** Evaluación reproducible (`SEED = 42`) sobre los mismos recortes de matrícula detectados por YOLO comparando EasyOCR, PaddleOCR y SmolVLM en tasa de acierto exacto, similitud de caracteres y tiempo de inferencia.
 
 ---
 
@@ -51,23 +52,27 @@ Para la ejecución de los distintos motores OCR y la compresión de vídeo se de
 
 ---
 
-## 1. Integración en el pipeline de vídeo (`VC_P4B_CSM_FMV.ipynb`)
+## 1. Integración en el pipeline de vídeo
 
 El cuaderno [`VC_P4B_CSM_FMV.ipynb`](./notebooks/VC_P4B_CSM_FMV.ipynb) parte del flujo dual de `P4a` (detector generalista COCO + detector propio de matrículas YOLOv11 + `PedestrianOcclusionManager`) y añade el módulo `LicensePlateOCR`:
 
 - **Backends soportados:**
   - `smolvlm`: utiliza `HuggingFaceTB/SmolVLM-Instruct` con un *prompt* específico para devolver únicamente caracteres alfanuméricos de matrícula (`max_new_tokens=10`).
   - `easyocr`: utiliza `EasyOCR` con idioma `es` y lista blanca estricta `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ`.
+
 - **Configuración empleada en vídeo:**
   - Entrada: [`../P4a/plate_test_video.mp4`](../P4a/plate_test_video.mp4)
   - Umbral de confianza: `CONFIDENCE_THRESHOLD = 0.35`, `FRAMES_TO_CONFIRM_CLASS = 5`, `APPLY_CENSORING = True`, `COMPRESS_VIDEO = True`.
+
 - **Salidas generadas en [`results/`](./results/):**
   - [`results/yolo_dual_detections_ocr_plates.csv`](./results/yolo_dual_detections_ocr_plates.csv): registro fotograma a fotograma que amplía las columnas de `P4a` con la columna `texto_matricula`.
   - [`results/yolo_dual_detections_ocr_plates.mp4`](./results/yolo_dual_detections_ocr_plates.mp4) y [`results/yolo_dual_detections_ocr_plates_compressed.mp4`](./results/yolo_dual_detections_ocr_plates_compressed.mp4): vídeo procesado con las detecciones, seguimiento, censura y lectura de matrícula superpuesta.
 
+https://github.com/user-attachments/assets/8b2e9ea7-7c1c-4a4f-93a5-21a23557fa55
+
 ---
 
-## 2. Comparativa OCR clásico vs. VLM (`notebooks/VC_P4B_CSM_FMV_comparative.ipynb`)
+## 2. Comparativa OCR clásico vs. VLM
 
 El cuaderno [`notebooks/VC_P4B_CSM_FMV_comparative.ipynb`](./notebooks/VC_P4B_CSM_FMV_comparative.ipynb) compara **EasyOCR**, **PaddleOCR** y **SmolVLM** sobre los mismos recortes de matrícula detectados por YOLO. Los resultados detallados por recorte se guardan en [`results/comparativa_resultados_parciales.csv`](./results/comparativa_resultados_parciales.csv).
 
@@ -88,10 +93,14 @@ flowchart LR
 ### 2.1. Metodología y condiciones del experimento
 
 - **Reproducibilidad:** Semilla global `SEED = 42` para `random`, `numpy` y `torch`, y variables de entorno (`FLAGS_use_mkldnn=0`, `KMP_DUPLICATE_LIB_OK`, `OMP_NUM_THREADS`, `MKL_NUM_THREADS`) para evitar conflictos entre librerías nativas.
+
 - **Conjunto de evaluación:** De las **2243 imágenes válidas** (descartando anotaciones vacías, `NONE` y placeholders `0000AAA`), se eligen **242 imágenes** de forma determinista con `random.Random(SEED).sample(...)`.
+
 - **Detección y preprocesado comunes:**
   1. Detector YOLO propio de `P4a` (`plate_detector_960_BATCH_16_small/weights/best.pt`) con `conf = 0.5` (ejecutado una sola vez, ≈ 24.3 ms de media por recorte).
+
   2. Recorte con margen de 5 px; si alto < 100 px o ancho < 300 px, se amplía con `INTER_CUBIC` hasta ~600 px de ancho (máximo ×3).
+
   3. Conversión a escala de grises y desenfoque gaussiano 5×5.
   - Resultado: **417 recortes** evaluados por cada modelo (a partir de las 242 imágenes).
 - **Configuración de los modelos:**
@@ -108,9 +117,9 @@ flowchart LR
 
 | Modelo | Aciertos exactos | Acierto exacto | Similitud media | Tiempo medio OCR | Tiempo medio total | Predicciones vacías |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **EasyOCR** | 136 / 417 | 32.61 % | 63.81 % | **30.59 ms** | **54.92 ms** | 57 |
-| **PaddleOCR** | 205 / 417 | 49.16 % | 75.45 % | 81.25 ms | 105.58 ms | 46 |
-| **SmolVLM** | **297 / 417** | **71.22 %** | **83.75 %** | 580.25 ms | 604.58 ms | **2** |
+| **EasyOCR** | 136 / 417 | 32.61 % | 63.81 % | **27.02 ms** | **52.86 ms** | 57 |
+| **PaddleOCR** | 205 / 417 | 49.16 % | 75.45 % | 75.76 ms | 101.61 ms | 46 |
+| **SmolVLM** | **297 / 417** | **71.22 %** | **83.75 %** | 514.17 ms | 540.01 ms | **2** |
 
 ```mermaid
 xychart-beta
@@ -133,14 +142,14 @@ xychart-beta
     title "Tiempo medio total por matrícula (ms)"
     x-axis ["EasyOCR", "PaddleOCR", "SmolVLM"]
     y-axis "Milisegundos" 0 --> 650
-    bar [54.92, 105.58, 604.58]
+    bar [52.86, 101.61, 540.01]
 ```
 
 #### Muestras visuales de lectura por modelo
 
 ![Comparativa visual de lecturas OCR sobre muestras de matrícula](./images/comparativa_ocr_muestras.png)
 
-### Coincidencias entre modelos
+#### Coincidencias entre modelos
 
 | Situación | Recortes |
 | --- | ---: |
@@ -151,18 +160,25 @@ xychart-beta
 | Solo acierta PaddleOCR | 13 |
 | Solo acierta SmolVLM | 60 |
 
-### 2.3. Conclusiones y recomendación
+### 2.3. Análisis de resultados y Conclusiones
 
 1. **Precisión:** **SmolVLM** lidera claramente la comparativa con un **71.22 %** de acierto exacto (297/417) y **83.75 %** de similitud media, además de registrar solo 2 predicciones vacías. **PaddleOCR** alcanza un **49.16 %** (75.45 % de similitud), mientras que **EasyOCR** se queda en un **32.61 %** (63.81 % de similitud).
-2. **Velocidad:** **EasyOCR** sigue siendo el más rápido (**30.59 ms** de inferencia OCR y **54.92 ms** totales, ≈ 18 fps), seguido de **PaddleOCR** en GPU (**81.25 ms** OCR y **105.58 ms** totales, ≈ 9.5 fps), que reduce en más de 4× su tiempo respecto a CPU. **SmolVLM** es el más costoso (**580.25 ms** OCR, **604.58 ms** totales).
+
+- Este tipo de resultados es consistente con los avances de la visión por computador actual, donde los VLMs muestran un rendimiento superior en tareas de OCR, especialmente en entornos desafiantes como matrículas con variaciones de iluminación, ángulo y ruido gracias a su entrenamiento multimodal y capacidad de generalización con datasets más amplios y variedad de estilos de texto. Por otro lado, los motores OCR clásicos como EasyOCR y PaddleOCR, aunque optimizados para velocidad y eficiencia, pueden verse limitados por su arquitectura específica y la necesidad de preprocesamiento más cuidadoso.
+
+2. **Velocidad:** **EasyOCR** sigue siendo el más rápido (**27.02 ms** de inferencia OCR y **52.86 ms** totales, ≈ 18 fps), seguido de **PaddleOCR** en GPU (**75.76 ms** OCR y **101.61 ms** totales, ≈ 9.5 fps), que reduce en más de 4× su tiempo respecto a CPU. **SmolVLM** es el menos capaz de computar con mayor frecuencia (**514.17 ms** OCR, **540.01 ms** totales).
+
+- En este campo resalta el beneficio de los motores OCR clásicos para aplicaciones en tiempo real o con limitaciones de hardware, donde la velocidad es crítica. El coste computacional de los VLMs es mayor, lo que puede ser un factor limitante en entornos con recursos restringidos Por otro lado, los VLMs como SmolVLM, aunque más lentos, ofrecen una precisión significativamente mayor, lo que puede ser crucial en aplicaciones donde la exactitud del reconocimiento es prioritaria.
+
 3. **Complementariedad:** En al menos uno de los tres modelos se acierta el **75.8 %** de los recortes (316/417), aunque SmolVLM por sí solo ya cubre la gran mayoría (60 aciertos exclusivos frente a 13 de PaddleOCR y 3 de EasyOCR).
+
+- Esto sugiere que una estrategia híbrida podría ser beneficiosa, donde se utilicen motores OCR más rápidos para un primer filtrado y, en caso de duda o baja confianza, se recurra a un VLM más preciso. Esta combinación puede optimizar tanto la velocidad como la precisión del sistema de reconocimiento de matrículas.
 
 | Escenario | Modelo recomendado |
 | --- | --- |
 | Vídeo en tiempo real o hardware limitado | **EasyOCR** |
 | Equilibrio entre velocidad y precisión en GPU | **PaddleOCR** |
 | Máxima precisión con GPU disponible | **SmolVLM** |
-
 
 
 ### 2.4. Limitaciones del experimento
