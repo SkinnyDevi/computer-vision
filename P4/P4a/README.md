@@ -36,10 +36,10 @@ Las pruebas y entrenamientos se han ejecutado sobre el siguiente entorno hardwar
 - **Sistema Operativo:** Linux (Kernel 7.3.3-1-cachyos)
 - **Entorno Python:** Python `3.11.8`, PyTorch `2.6.0+cu124`, OpenCV `4.10.0`, Ultralytics `8.4.202`
 
-Para instalar las dependencias necesarias:
+Las dependencias Python del proyecto se encuentran unificadas en el archivo raíz [`requirements.txt`](../requirements.txt):
 
 ```bash
-pip install -r requirements.txt
+pip install -r ../requirements.txt
 ```
 
 Para la compresión final de los vídeos anotados con el códec H.264 (`libx264`) se requiere tener `ffmpeg` instalado en el sistema.

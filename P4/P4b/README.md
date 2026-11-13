@@ -1,123 +1,189 @@
+# Práctica 4b de Visión por Computador — Reconocimiento de Caracteres en Matrículas
 
-## Práctica 4b. Reconocimiento de caracteres en matrículas
+## Datos de la práctica
 
-### Contenidos
+- **Asignatura:** Visión por Computador
+- **Práctica:** P4b (Reconocimiento de caracteres en matrículas mediante OCR y VLM)
+- **Autores:** Félix Miguel Velásquez y Cristina Santana Martín
+- **Cuaderno principal (vídeo + OCR):** [`VC_P4B_CSM_FMV.ipynb`](./VC_P4B_CSM_FMV.ipynb)
+- **Cuaderno de comparativa (OCR vs. VLM):** [`notebooks/VC_P4B_CSM_FMV_comparative.ipynb`](./notebooks/VC_P4B_CSM_FMV_comparative.ipynb)
+- **Cuaderno base de demostradores:** [`VC_P4b.ipynb`](./VC_P4b.ipynb)
+- **Worker aislado de PaddleOCR:** [`paddle_ocr_worker.py`](./paddle_ocr_worker.py)
+- **Resultados generados (vídeos y CSV):** [`results/`](./results/)
 
-[Tarea](#41-aspectos-cubiertos)  
-[OCRs](#42-ocrs-clásicos)  
-[VLMs](#43-vlms)  
-[Entrega](#44-entrega)
+---
 
-<!-- MOdelos VLM para OCR https://florence-2.com  -->
+## Descripción
 
-## 4.0 Sobre la práctica 4
+Esta segunda parte de la Práctica 4 amplía el sistema de detección y seguimiento desarrollado en [`P4a`](../P4a/README.md) para incorporar el **reconocimiento óptico de caracteres (OCR)** sobre las matrículas detectadas, permitiendo leer e identificar el texto de cada vehículo tanto en vídeo como en imagen estática.
 
-Esta práctica se compone de dos tareas diferentes, detección y OCR. En este README se explica la segunda tarea, el OCR, para leer sobre la primera ir a la carpeta *P4*. Ambas tareas se entregan juntas, en el mismo GitHub, ya que serán evaluadas conjuntamente.
+El trabajo desarrollado cubre dos bloques principales:
 
-## 4.1 Aspectos cubiertos
+1. **Integración de lectura de matrículas en vídeo:** Incorporación de la clase `LicensePlateOCR` al pipeline `LicensePlateVideoProcessor` (con soporte para SmolVLM y EasyOCR), mostrando el texto leído sobre el vídeo anotado y añadiendo la columna `texto_matricula` al archivo CSV fotograma a fotograma.
 
-En esta práctica se aborda el uso de modelos existentes para el reconocimiento de texto, el objetivo es el de expandir el detector de coches y matrículas para que sea capaz de **reconocer los caracteres en las matrículas visibles** y así ser capaces de identificar el coche correctamente.
+2. **Comparativa experimental entre OCR clásicos y VLMs:** Evaluación reproducible (`SEED = 42`) sobre los mismos recortes de matrícula detectados por YOLO comparando EasyOCR, PaddleOCR y SmolVLM en tasa de acierto exacto, similitud de caracteres y tiempo de inferencia.
 
-En la actualidad suele haber dos vías a la hora de plantear un modelo que realice reconocimiento óptico de caracteres (OCR). La primera sería usar una red neuronal especializada en detectar e identificar el texto en la imagen, mientras que la segunda correspondería a usar un modelo de lenguaje visual (VLM por sus siglas en inglés) como podrían ser GPT-4o o Gemini 2.5 para extraer directamente la información de la imagen. Estos VLM pueden estar o no fine-tuneados para realizar tareas de OCR. Estas dos maneras de enfocar el problema representan el clásico balance entre una solución rápida (red neuronal) y una solución con una potencial mayor tasa de acierto pero más costosa computacionalmente (VLM's).
+---
 
-En la práctica de hoy propondremos el uso de al menos dos modelos, uno de cada tipo, para hacer algunas comparaciones entre ellos y complementar la tarea de detección. El cuaderno *VC_P4b.ipynb* contiene ejemplos de algunos de los modelos que se plantean a continuación.
+## Requisitos y entorno de ejecución
 
-### 4.2 OCRs Clásicos
+Las pruebas y comparativas se han ejecutado sobre el siguiente entorno hardware y software:
 
-Como OCR's basados en redes neuronales clásicas, proponemos tres opciones: los clásicos Tesseract y easyOCR, y el más moderno PaddleOCR. Para los tres, el cuaderno *VC_P4b.ipynb* incluye demostradores mínimos. Otras posibilidades son [KERAS-OCR](https://github.com/faustomorales/keras-ocr), o [dots.ocr](https://github.com/rednote-hilab/dots.ocr), de los que no ilustramos su uso en este cuaderno.
-<!-- Al ser un nuevo *environment* no olvidar  que es necesario instalar el paquete para ejecutar cuadernos, desde consola-->
+- **CPU:** Intel Core i7-10700 (16 hilos)
+- **RAM:** 31.25 GB
+- **GPU:** NVIDIA GeForce RTX 3060 Ti (7.67 GB VRAM)
+- **Entorno Python:** Python `3.11.18`, PyTorch `2.6.0+cu124`, OpenCV `4.10.0`
 
-Por un lado, el conocido [Tesseract](https://github.com/tesseract-ocr/tesseract), requiere desde python un *wrapper*, previa instalación.
-La documentación de [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) dispone de **información para su instalación en distintas plataformas**.
-Para entorno WIdnows:
+Las dependencias Python del proyecto se encuentran unificadas en el archivo raíz [`requirements.txt`](../requirements.txt):
 
-- Decargar los binarios desde el repositorio para tal fin de la [Universidad Manheim](https://github.com/UB-Mannheim/tesseract/wiki).
-- Ejecutar el archivo descargado para lsu instalación
-- Durante la instalación, he indicado que incluya datos de otros lenguajes, en mi caso español
-- Anotar la ruta donde se instala, dado que debe especificarse en el código python. O añadir al *PATH*.
-- Instalar el *wrapper* [pytesseract](https://pypi.org/project/pytesseract/) en el *environment* *VC_P4*:
-
-```
-pip install pytesseract
-```
-
-Por otro lado, [easyOCR](https://github.com/JaidedAI/EasyOCR) ofrece soporte para más de 80 lenguas. Su instalación es a priori más simple, basta con:
-
-```
-pip install easyocr
+```bash
+pip install -r ../requirements.txt
 ```
 
-Pero surge una **incidencia** con OpenCV, dado que funciones de visualización, como *imshow*, dejan de estar presentes. Observando la incompatibilidad entre la instalación de YOLO y easyOCR,
-puedes llegar a un punto en que la instalación de OpenCV no sea completa para nuestro cuaderno. Lo hemos conseguido resolver con:
+Para la ejecución de los distintos motores OCR y la compresión de vídeo se deben tener en cuenta los siguientes aspectos:
 
+- **Sistema:** `ffmpeg` para la compresión H.264 del vídeo de salida (`yolo_dual_detections_ocr_plates_compressed.mp4`). Si se utiliza `pytesseract`, requiere los binarios de [Tesseract OCR](https://tesseract-ocr.github.io/tessdoc/Installation.html) instalados y accesibles en el `PATH`.
+- **OpenCV y EasyOCR:** Si al instalar `easyocr` se instala `opencv-python-headless` y dejan de funcionar ventanas de OpenCV (`cv2.imshow`), reinstalar `opencv-python`:
+  ```bash
+  pip uninstall -y opencv-python opencv-python-headless
+  pip install opencv-python --upgrade
+  ```
+- **Aislamiento de PaddleOCR (`paddle_ocr_worker.py`):** PaddlePaddle y PyTorch cargan versiones incompatibles de OpenMP, oneDNN y CUDA; importarlos en el mismo kernel de Jupyter puede provocar un *segmentation fault*. Por ello, PaddleOCR se ejecuta en un subproceso independiente mediante [`paddle_ocr_worker.py`](./paddle_ocr_worker.py), comunicándose por archivos temporales JSON.
+
+---
+
+## 1. Integración en el pipeline de vídeo
+
+El cuaderno [`VC_P4B_CSM_FMV.ipynb`](./notebooks/VC_P4B_CSM_FMV.ipynb) parte del flujo dual de `P4a` (detector generalista COCO + detector propio de matrículas YOLOv11 + `PedestrianOcclusionManager`) y añade el módulo `LicensePlateOCR`:
+
+- **Backends soportados:**
+  - `smolvlm`: utiliza `HuggingFaceTB/SmolVLM-Instruct` con un *prompt* específico para devolver únicamente caracteres alfanuméricos de matrícula (`max_new_tokens=10`).
+  - `easyocr`: utiliza `EasyOCR` con idioma `es` y lista blanca estricta `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ`.
+
+- **Configuración empleada en vídeo:**
+  - Entrada: [`../P4a/plate_test_video.mp4`](../P4a/plate_test_video.mp4)
+  - Umbral de confianza: `CONFIDENCE_THRESHOLD = 0.35`, `FRAMES_TO_CONFIRM_CLASS = 5`, `APPLY_CENSORING = True`, `COMPRESS_VIDEO = True`.
+
+- **Salidas generadas en [`results/`](./results/):**
+  - [`results/yolo_dual_detections_ocr_plates.csv`](./results/yolo_dual_detections_ocr_plates.csv): registro fotograma a fotograma que amplía las columnas de `P4a` con la columna `texto_matricula`.
+  - [`results/yolo_dual_detections_ocr_plates.mp4`](./results/yolo_dual_detections_ocr_plates.mp4) y [`results/yolo_dual_detections_ocr_plates_compressed.mp4`](./results/yolo_dual_detections_ocr_plates_compressed.mp4): vídeo procesado con las detecciones, seguimiento, censura y lectura de matrícula superpuesta.
+
+https://github.com/user-attachments/assets/8b2e9ea7-7c1c-4a4f-93a5-21a23557fa55
+
+---
+
+## 2. Comparativa OCR clásico vs. VLM
+
+El cuaderno [`notebooks/VC_P4B_CSM_FMV_comparative.ipynb`](./notebooks/VC_P4B_CSM_FMV_comparative.ipynb) compara **EasyOCR**, **PaddleOCR** y **SmolVLM** sobre los mismos recortes de matrícula detectados por YOLO. Los resultados detallados por recorte se guardan en [`results/comparativa_resultados_parciales.csv`](./results/comparativa_resultados_parciales.csv).
+
+```mermaid
+flowchart LR
+    A["Dataset + anotaciones JSON"] --> B["Muestreo determinista (SEED = 42, 242 imágenes)"]
+    B --> C["Detección YOLO (conf ≥ 0.5)"]
+    C --> D["Recorte + preprocesado (417 recortes)"]
+    D --> E1["EasyOCR (GPU)"]
+    D --> E2["PaddleOCR (subproceso, GPU)"]
+    D --> E3["SmolVLM (GPU, bf16)"]
+    E1 --> F["Métricas por recorte"]
+    E2 --> F
+    E3 --> F
+    F --> G["CSV + tabla resumen + gráficas"]
 ```
-pip uninstall opencv-python opencv-python-headless
-pip install opencv-python --upgrade
+
+### 2.1. Metodología y condiciones del experimento
+
+- **Reproducibilidad:** Semilla global `SEED = 42` para `random`, `numpy` y `torch`, y variables de entorno (`FLAGS_use_mkldnn=0`, `KMP_DUPLICATE_LIB_OK`, `OMP_NUM_THREADS`, `MKL_NUM_THREADS`) para evitar conflictos entre librerías nativas.
+
+- **Conjunto de evaluación:** De las **2243 imágenes válidas** (descartando anotaciones vacías, `NONE` y placeholders `0000AAA`), se eligen **242 imágenes** de forma determinista con `random.Random(SEED).sample(...)`.
+
+- **Detección y preprocesado comunes:**
+  1. Detector YOLO propio de `P4a` (`plate_detector_960_BATCH_16_small/weights/best.pt`) con `conf = 0.5` (ejecutado una sola vez, ≈ 24.3 ms de media por recorte).
+
+  2. Recorte con margen de 5 px; si alto < 100 px o ancho < 300 px, se amplía con `INTER_CUBIC` hasta ~600 px de ancho (máximo ×3).
+
+  3. Conversión a escala de grises y desenfoque gaussiano 5×5.
+  - Resultado: **417 recortes** evaluados por cada modelo (a partir de las 242 imágenes).
+- **Configuración de los modelos:**
+
+| Modelo | Tipo | Ejecución | Configuración |
+| --- | --- | --- | --- |
+| **EasyOCR** | OCR neuronal (CRAFT + CRNN) | GPU, en el kernel | `lang=["es"]`, `allowlist` `0-9A-Z`; si algún fragmento tiene 7 caracteres, se usa ese |
+| **PaddleOCR** | OCR neuronal (PP-OCRv6) | GPU (`--gpu`), en subproceso ([`paddle_ocr_worker.py`](./paddle_ocr_worker.py)) | `lang="es"`, modelos `PP-OCRv6_medium_det` y `PP-OCRv6_medium_rec`, sin clasificación de orientación ni corrección de perspectiva, `enable_mkldnn=False`; se unen todos los textos detectados |
+| **SmolVLM** (`HuggingFaceTB/SmolVLM-Instruct`) | VLM generalista | GPU, `bfloat16` | *Prompt*: “Read the license plate text… Reply ONLY with the alphanumeric characters”, `max_new_tokens=10`, decodificación voraz |
+
+- **Métricas registradas:** Predicción limpiada a `A-Z0-9`, **acierto exacto** carácter a carácter frente a la matrícula real más parecida de la imagen, **similitud de caracteres** (`difflib.SequenceMatcher(...).ratio()`), **tiempo OCR** (solo inferencia del lector) y **tiempo total** (YOLO + OCR). Si YOLO no detecta nada, cuenta como fallo.
+
+### 2.2. Resultados y gráficas comparativas (417 recortes, 242 imágenes)
+
+| Modelo | Aciertos exactos | Acierto exacto | Similitud media | Tiempo medio OCR | Tiempo medio total | Predicciones vacías |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **EasyOCR** | 136 / 417 | 32.61 % | 63.81 % | **27.02 ms** | **52.86 ms** | 57 |
+| **PaddleOCR** | 205 / 417 | 49.16 % | 75.45 % | 75.76 ms | 101.61 ms | 46 |
+| **SmolVLM** | **297 / 417** | **71.22 %** | **83.75 %** | 514.17 ms | 540.01 ms | **2** |
+
+```mermaid
+xychart-beta
+    title "Acierto exacto (%)"
+    x-axis ["EasyOCR", "PaddleOCR", "SmolVLM"]
+    y-axis "Porcentaje" 0 --> 100
+    bar [32.61, 49.16, 71.22]
 ```
 
-Por último, [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) es la solución de OCR propuesta por la empresa china PaddlePaddle y ofrece, al igual que EasyOCR, soporte para más de 80 idiomas, incluyendo el Español. Su instalación consta de dos pasos, primero hay que instalar la librería de PaddlePaddle usando el comando que se corresponda a nuestra máquina en la [web oficial](https://www.paddlepaddle.org.cn/en/install/quick?docurl=/documentation/docs/en/develop/install/pip/windows-pip_en.html), de forma muy similar a torch. Posteriormente, se instala el OCR usando el comando en la consola:
-
-```
-pip install paddleocr
-```
-
-
-Importante tener en cuenta que habitualmente, tanto estos modelos como los VLMs especializados, estan optimizados para tratar con texto escrito a máquina, no manuscrito. En la siguiente imagen podemos ver la diferencia clara que tienen de rendimiento según el origen de la tipografía.
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="images/Test_output_Tesseract.jpg" width="100%"><br>
-      <sub>Resultado de Tesseract con texto a máquina</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="images/Test_manual_output_Tesseract.jpg" width="100%"><br>
-      <sub>Resultado de Tesseract con texto manuscrito</sub>
-    </td>
-  </tr>
-</table>
-
-
-### 4.3 VLMs
-
-De entre los VLMs podemos seleccionar alguno que este explicitamente entrenado para esta tarea, como podría ser el [Unlimited-COR de Baidu]( https://github.com/baidu/Unlimited-OCR) o uno de uso general como [SmolVLM](https://huggingface.co/blog/smolvlm). Cuando se selecciona esta opción, hay que tener especial cuidado con la cantidad de recursos que necesitan para ser ejecutados en local, especialmente si no contamos con una GPU. 
-Tanto SmolVLM como Unlimited-OCR, han sido escogidos por ser bastantes ligeros, permitiendo su uso en ordenadores no muy potentes. Para usarlos, tendremos que instalar principalmente dos librerias diferentes: torch, haciendo uso de la [web oficial](https://pytorch.org/get-started/locally/) para obtener el comando que se corresponda a nuestro PC, y la librería transformers de [HuggingFace](https://huggingface.co). La librería transformers nos permite descargar y usar fácilmente modelos entrenados por la comunidad en nuestro ordenador. Para su instalación simplemente:
-
-```
-pip install transformers
+```mermaid
+xychart-beta
+    title "Similitud media de caracteres (%)"
+    x-axis ["EasyOCR", "PaddleOCR", "SmolVLM"]
+    y-axis "Porcentaje" 0 --> 100
+    bar [63.81, 75.45, 83.75]
 ```
 
-Otras posibilidades de modelos generales podrían ser los modelos de la familia [Idefics](https://huggingface.co/blog/idefics2) de la propia HuggingFace, [Florence-2](https://huggingface.co/microsoft/Florence-2-large) de Microsoft, [PaliGemma](https://huggingface.co/blog/paligemma2) de Google o [MiniCPM-V](https://github.com/openbmb/MiniCPM-V).
+```mermaid
+xychart-beta
+    title "Tiempo medio total por matrícula (ms)"
+    x-axis ["EasyOCR", "PaddleOCR", "SmolVLM"]
+    y-axis "Milisegundos" 0 --> 650
+    bar [52.86, 101.61, 540.01]
+```
 
-Otros VLM especializados en OCR son [Falcon-OCR](https://huggingface.co/tiiuae/Falcon-OCR) (en las pruebas que hemos hecho este solo funciona en linux, igual ustedes tienen más maña) o [PaddleOCR-VL](https://huggingface.co/PaddlePaddle/PaddleOCR-VL).
+#### Muestras visuales de lectura por modelo
+
+![Comparativa visual de lecturas OCR sobre muestras de matrícula](./images/comparativa_ocr_muestras.png)
+
+#### Coincidencias entre modelos
+
+| Situación | Recortes |
+| --- | ---: |
+| Los tres aciertan | 82 |
+| Al menos uno acierta | 316 (75.8 %) |
+| Ninguno acierta | 101 |
+| Solo acierta EasyOCR | 3 |
+| Solo acierta PaddleOCR | 13 |
+| Solo acierta SmolVLM | 60 |
+
+### 2.3. Análisis de resultados y Conclusiones
+
+1. **Precisión:** **SmolVLM** lidera claramente la comparativa con un **71.22 %** de acierto exacto (297/417) y **83.75 %** de similitud media, además de registrar solo 2 predicciones vacías. **PaddleOCR** alcanza un **49.16 %** (75.45 % de similitud), mientras que **EasyOCR** se queda en un **32.61 %** (63.81 % de similitud).
+
+- Este tipo de resultados es consistente con los avances de la visión por computador actual, donde los VLMs muestran un rendimiento superior en tareas de OCR, especialmente en entornos desafiantes como matrículas con variaciones de iluminación, ángulo y ruido gracias a su entrenamiento multimodal y capacidad de generalización con datasets más amplios y variedad de estilos de texto. Por otro lado, los motores OCR clásicos como EasyOCR y PaddleOCR, aunque optimizados para velocidad y eficiencia, pueden verse limitados por su arquitectura específica y la necesidad de preprocesamiento más cuidadoso.
+
+2. **Velocidad:** **EasyOCR** sigue siendo el más rápido (**27.02 ms** de inferencia OCR y **52.86 ms** totales, ≈ 18 fps), seguido de **PaddleOCR** en GPU (**75.76 ms** OCR y **101.61 ms** totales, ≈ 9.5 fps), que reduce en más de 4× su tiempo respecto a CPU. **SmolVLM** es el menos capaz de computar con mayor frecuencia (**514.17 ms** OCR, **540.01 ms** totales).
+
+- En este campo resalta el beneficio de los motores OCR clásicos para aplicaciones en tiempo real o con limitaciones de hardware, donde la velocidad es crítica. El coste computacional de los VLMs es mayor, lo que puede ser un factor limitante en entornos con recursos restringidos Por otro lado, los VLMs como SmolVLM, aunque más lentos, ofrecen una precisión significativamente mayor, lo que puede ser crucial en aplicaciones donde la exactitud del reconocimiento es prioritaria.
+
+3. **Complementariedad:** En al menos uno de los tres modelos se acierta el **75.8 %** de los recortes (316/417), aunque SmolVLM por sí solo ya cubre la gran mayoría (60 aciertos exclusivos frente a 13 de PaddleOCR y 3 de EasyOCR).
+
+- Esto sugiere que una estrategia híbrida podría ser beneficiosa, donde se utilicen motores OCR más rápidos para un primer filtrado y, en caso de duda o baja confianza, se recurra a un VLM más preciso. Esta combinación puede optimizar tanto la velocidad como la precisión del sistema de reconocimiento de matrículas.
+
+| Escenario | Modelo recomendado |
+| --- | --- |
+| Vídeo en tiempo real o hardware limitado | **EasyOCR** |
+| Equilibrio entre velocidad y precisión en GPU | **PaddleOCR** |
+| Máxima precisión con GPU disponible | **SmolVLM** |
 
 
-### 4.4 Entrega
+### 2.4. Limitaciones del experimento
 
-La segunda entrega de la práctica 4 consistirá en dos tareas:
+- El preprocesado común (escala de grises + desenfoque) no tiene por qué ser óptimo para todos los motores.
+- En el análisis de resultados, 2 de los 417 registros corresponden a imágenes donde YOLO no detectó ninguna matrícula (`recorte is None`), contando como fallo para todos los modelos.
 
-- Completar la tarea planteada en el apartado de detección con la adquisición del texto de cada matrícula detectada y su posterior guardado en el csv.
-
-- Realizar una comparativa entre dos OCR, uno clásico y un VLM, en términos de tiempo de inferencia y tasa de acierto, usando la base de datos de detección de matrículas completándola con el texto si faltase.
-
-
-La **entrega** se hará junto a la de la anterior práctica, incluyendo en el vídeo de test una visualización de la matrícula leída y en el csv de volcado una columna con la matrícula correspondiente. La comparativa deberá hacerse dentro del propio README, incluyendo gráficas de tiempos y rendimiento, así como unas pequeñas conclusiones. 
-
-Unos consejos en vista a años anteriores:
-
-- La comparativa entre los modelos tiene que ser en base a métricas.
-
-- La condiciones del experimento tienen que ser las mismas para todos los modelos evaluados. 
-
-- Usen un número mínimo de imágenes para realizar la comparativa.
-
-- Poned las especificaciones de la máquina en que se hyan hecho las pruebas, los tiempos de inferencia pueden variar mucho según el equipo.
-
-
-
-
-***
-Bajo licencia de Creative Commons Reconocimiento - No Comercial 4.0 Internacional
-
+---
