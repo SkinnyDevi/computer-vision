@@ -13,7 +13,7 @@ class TimeSeriesGraph:
     def __init__(self, 
                  values: list[float], 
                  normalize_range: tuple[float, float],
-                threshold: float = None
+                 threshold: float = None
         ):
         self.values = values
         self.normalize_range = normalize_range
@@ -97,9 +97,10 @@ class TimeSeriesGraph:
         )
         
         
-    def render(self, frame: FrameCanvas, position: Point, size: Size):
+    def render(self, frame: FrameCanvas, position: Point, size: Size, values: list[float]):
         # Render the time series graph on the HUD
         # This could involve drawing lines or bars representing the values over time
+        self.values = values
         graph_bg_position, graph_bg_size = self._draw_graph_bg(frame, position, size)
         self._plot_points_over_time(frame, position, size, self.values)
         self._draw_threshold_dotted_line(frame, graph_bg_position, graph_bg_size)
@@ -169,7 +170,8 @@ class ThresholdProgressBar:
             cv2.LINE_AA
         )
 
-    def render(self, frame: FrameCanvas, position: Point, size: Size):
+    def render(self, frame: FrameCanvas, position: Point, size: Size, new_value: float):
+        self.value = new_value
         self._draw_bar_bg(frame, position, size)
         self._draw_inner_value_bar(frame, position, size)
         self._draw_border(frame, position, size)
@@ -209,7 +211,8 @@ class TimeSeriesTelemetryHUD:
         self,
         frame: FrameCanvas,
         position: Point,
-        size: Size
+        size: Size,
+        progress_bar_value: float
     ):
         # Render the label with the current value
         cv2.putText(
@@ -226,9 +229,15 @@ class TimeSeriesTelemetryHUD:
         # Render the progress bar next to the label
         progress_bar_size = Size(150, 15)  # Adjust size as needed
         progress_bar_position = Point(position.x + size.width - progress_bar_size.width - 20, position.y - (progress_bar_size.height // 1.2))  # Adjust position as needed
-        self.progress_bar.render(frame, progress_bar_position, progress_bar_size)
+        self.progress_bar.render(frame, progress_bar_position, progress_bar_size, progress_bar_value)
     
-    def render(self, frame: FrameCanvas, position: Point, size: Size):
+    def render(self, 
+               frame: FrameCanvas, 
+               position: Point, 
+               size: Size,
+               progress_bar_value: float,
+               time_series_values: list[float]
+        ):
         # Render the title of the HUD
         # Render the label with the current value
         initial_pos = position * 1 # create a copy
@@ -237,11 +246,11 @@ class TimeSeriesTelemetryHUD:
         self._render_title(frame, initial_pos)
         initial_pos.y += 30 * frame.ui_scale  # Move down for the label and progress bar
         
-        self._render_label_with_progress_bar(frame, initial_pos, size)
+        self._render_label_with_progress_bar(frame, initial_pos, size, progress_bar_value)
         initial_pos.y += 20 * frame.ui_scale  # Move down for the time series graph
         
         graph_size = Size(size.width - 20, 80)
-        self.time_series_graph.render(frame, initial_pos, graph_size)
+        self.time_series_graph.render(frame, initial_pos, graph_size, time_series_values)
         initial_pos.y += graph_size.height + 20 * frame.ui_scale  # Move down for additional graphs
         
         for render_func in self.additional_graphs_render:

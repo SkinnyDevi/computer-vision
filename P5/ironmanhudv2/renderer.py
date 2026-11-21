@@ -1,20 +1,33 @@
 import cv2
 import time
+import mediapipe as mp
 
+from ironmanhudv2.biometry_engine.biometric_state import BiometricState
+from ironmanhudv2.biometry_engine.tracker import BiometricTracker
 from ironmanhudv2.frame_canvas import FrameCanvas
 from ironmanhudv2.hud_panel import HUDPanel
 from ironmanhudv2.time_series_telemetry import ThresholdProgressBar, TimeSeriesGraph, TimeSeriesTelemetryHUD
 from ironmanhudv2.units import Point, Size
+from ironmanhudv2.biometry_engine.engine_config import BiometryConfig
 
+BaseOptions = mp.tasks.BaseOptions
+FaceLandmarker = mp.tasks.vision.FaceLandmarker
+FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
 
 class IronManHUDRenderer:
     def __init__(self, resize_frame: tuple[int, int] = None):
         self.resize_frame = Size(*resize_frame) if resize_frame else None
         
         self.prev_frame_time = None
+        self._last_ts_ms: int = 0
         
+        self._biometry_config: BiometryConfig | None = None
+        self._biometric_tracker: BiometricTracker | None = None
+        self._landmarker = None
         self._ocular_telemetry_hud = None
         self._oral_telemetry_hud = None
+        
+        self._bio_state: BiometricState = BiometricState()
 
     def _render_title_bar(self, frame: FrameCanvas, fps: float):
         panel_pos = Point(10, 10).scale(frame.ui_scale)
@@ -49,12 +62,11 @@ class IronManHUDRenderer:
         )
 
     def _blink_label(self, frame: FrameCanvas, position: Point, size: Size):
-        MOCK_BLINK_COUNT = 5  # Placeholder for the actual blink count
-        MOCK_BLINK_BPM = 12  # Placeholder for the actual blink BPM
-        
+        blink_count = self._bio_state.ear.blink_count
+        blink_bpm = self._bio_state.ear.blink_rate_bpm
         cv2.putText(
             frame.canvas,
-            f"BLINKS: {MOCK_BLINK_COUNT:.2f} | BPM: {MOCK_BLINK_BPM:.2f}",  # Placeholder for the actual blink count and BPM
+            f"BLINKS: {blink_count} | BPM: {blink_bpm:.2f}",
             position.to_int_tuple(),  # Position of the label
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45 * frame.ui_scale,  # Scale the font size based on UI scale
@@ -64,12 +76,13 @@ class IronManHUDRenderer:
         )
     
     def _eye_closure_label(self, frame: FrameCanvas, position: Point, size: Size):
-        MOCK_EYE_CLOSED_DURATION = 1.2  # Placeholder for the actual eye closure value
         MOCK_EYE_MICRO_SLEEP_SEC = 2.5  # Placeholder for the actual microsleep duration
 
+        closed_duration = self._bio_state.ear.eye_closed_duration
+        
         cv2.putText(
             frame.canvas,
-            f"EYE CLOSURE: {MOCK_EYE_CLOSED_DURATION:4.2f}s / {MOCK_EYE_MICRO_SLEEP_SEC:.1f}s",  # Placeholder for the actual eye closure value
+            f"EYE CLOSURE: {closed_duration:4.2f}s / {MOCK_EYE_MICRO_SLEEP_SEC:.1f}s",  # Placeholder for the actual eye closure value
             position.to_int_tuple(),  # Position of the label
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45 * frame.ui_scale,  # Scale the font size based on UI scale
@@ -82,24 +95,16 @@ class IronManHUDRenderer:
         return lambda frame, pos, size: func(frame, pos, size)
     
     def _prepare_ocular_telemetry(self):
-        MOCK_VALUE = 0.142  # Placeholder for the actual EAR value
-        MOCK_THRESHOLD = 0.3  # Placeholder for the actual threshold value
-        MOCK_MAX_VALUE = 0.8  # Placeholder for the actual max value for normalization
-        
         progress_bar = ThresholdProgressBar(
-            value=MOCK_VALUE, # PLACEHOLDER
-            threshold=MOCK_THRESHOLD, # PLACEHOLDER
-            max_value=MOCK_MAX_VALUE, # PLACEHOLDER
+            value=0,
+            threshold=self._biometry_config.params_EAR.threshold,
+            max_value=0.42,
         )
         
-        def random_data_series(num_points: int) -> list[float]:
-            import random
-            return [random.uniform(0.0, MOCK_MAX_VALUE) for _ in range(num_points)]
-        
         time_series_graph = TimeSeriesGraph(
-            values=random_data_series(256), # PLACEHOLDER
-            normalize_range=(0.0, MOCK_MAX_VALUE), # PLACEHOLDER
-            threshold=MOCK_THRESHOLD, # PLACEHOLDER
+            values=[],
+            normalize_range=(0.05, 0.42),
+            threshold=self._biometry_config.params_EAR.threshold,
         )
         
         additional_data_labels = [
@@ -109,7 +114,7 @@ class IronManHUDRenderer:
         
         ocular_telemetry_hud = TimeSeriesTelemetryHUD(
             title="OCULAR TELEMETRY",
-            label=f"EAR: {MOCK_VALUE:.2f}", # PLACEHOLDER
+            label=f"EAR: {0:.2f}", # PLACEHOLDER
             progress_bar=progress_bar,
             time_series_graph=time_series_graph,
             additional_graphs_render=additional_data_labels
@@ -118,39 +123,31 @@ class IronManHUDRenderer:
         return ocular_telemetry_hud        
     
     def _yawn_counter_label(self, frame: FrameCanvas, position: Point, size: Size):
-        MOCK_YAWN_COUNT = 3  # Placeholder for the actual yawn count
         MOCK_YAWN_STATE = "NORMAL"
         
+        yawn_count = self._bio_state.mar.yawn_count
         cv2.putText(
             frame.canvas,
-            f"YAWNS: {MOCK_YAWN_COUNT} [{MOCK_YAWN_STATE}]",  # Placeholder for the actual yawn count
-            position.to_int_tuple(),  # Position of the label
+            f"YAWNS: {yawn_count} [{MOCK_YAWN_STATE}]",  # Placeholder for the actual yawn count
+            position.to_int_tuple(),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.45 * frame.ui_scale,  # Scale the font size based on UI scale
-            (255, 255, 255),  # White color for the label
+            0.45 * frame.ui_scale,
+            (255, 255, 255), # White color for the label
             1,
             cv2.LINE_AA
         )
     
     def _prepare_oral_telemetry(self):
-        MOCK_VALUE = 0.093  # Placeholder for the actual EAR value
-        MOCK_THRESHOLD = 0.3  # Placeholder for the actual threshold value
-        MOCK_MAX_VALUE = 1.0  # Placeholder for the actual max value for normalization
-        
         progress_bar = ThresholdProgressBar(
-            value=MOCK_VALUE, # PLACEHOLDER
-            threshold=MOCK_THRESHOLD, # PLACEHOLDER
-            max_value=MOCK_MAX_VALUE, # PLACEHOLDER
+            value=0,
+            threshold=self._biometry_config.params_MAR.threshold,
+            max_value=0.90,
         )
         
-        def random_data_series(num_points: int) -> list[float]:
-            import random
-            return [random.uniform(0.0, MOCK_MAX_VALUE) for _ in range(num_points)]
-        
         time_series_graph = TimeSeriesGraph(
-            values=random_data_series(256), # PLACEHOLDER
-            normalize_range=(0.0, MOCK_MAX_VALUE), # PLACEHOLDER
-            threshold=MOCK_THRESHOLD, # PLACEHOLDER
+            values=[],
+            normalize_range=(0.0, 0.90),
+            threshold=self._biometry_config.params_MAR.threshold,
         )
         
         additional_data_labels = [
@@ -159,7 +156,7 @@ class IronManHUDRenderer:
         
         ocular_telemetry_hud = TimeSeriesTelemetryHUD(
             title="ORAL / FATIGUE TELEMETRY",
-            label=f"MAR: {MOCK_VALUE:.2f}", # PLACEHOLDER
+            label=f"MAR: {0:.2f}", # PLACEHOLDER
             progress_bar=progress_bar,
             time_series_graph=time_series_graph,
             additional_graphs_render=additional_data_labels
@@ -167,12 +164,44 @@ class IronManHUDRenderer:
         
         return ocular_telemetry_hud  
     
-    def setup(self):
+    def setup(self, biometry_config: BiometryConfig):
+        self.close()
+        self._biometry_config = biometry_config
+        self._biometric_tracker = BiometricTracker(biometry_config)
         self._ocular_telemetry_hud = self._prepare_ocular_telemetry()
         self._oral_telemetry_hud = self._prepare_oral_telemetry()
-        self.prev_frame_time = time.time()
+        landmarker_options = FaceLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=self._biometry_config.model_path),
+            running_mode=mp.tasks.vision.RunningMode.VIDEO,
+            num_faces=1,
+            output_face_blendshapes=True,
+        )
+        self._landmarker = FaceLandmarker.create_from_options(landmarker_options)
+        self.prev_frame_time = time.monotonic()
+        self._last_ts_ms = 0
+
+    def close(self) -> None:
+        landmarker = getattr(self, "_landmarker", None)
+        if landmarker is not None:
+            landmarker.close()
+            self._landmarker = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
         
     def _is_setup_complete(self) -> bool:
+        if self._biometry_config is None or self._biometric_tracker is None or self._landmarker is None:
+            return False
+
         if self._ocular_telemetry_hud is None:
             return False
         
@@ -193,20 +222,49 @@ class IronManHUDRenderer:
         size_offset = Size(20, 40).scale(frame.ui_scale)
         size = Size(panel_size.width - size_offset.width, (panel_size.height - size_offset.height) // 2) # Size for the time series graph and progress bar
         
-        self._ocular_telemetry_hud.render(frame, initial_pos, size)
+        self._ocular_telemetry_hud.label = f"EAR: {self._bio_state.ear.value:.2f}"
+        self._ocular_telemetry_hud.render(
+            frame,
+            initial_pos,
+            size,
+            self._bio_state.ear.value,
+            self._bio_state.ear.history,
+        )
         
         initial_pos.y += size.height + (10 * (frame.ui_scale * 2))  # Move down for the next graph
-        self._oral_telemetry_hud.render(frame, initial_pos, size)
+        self._oral_telemetry_hud.label = f"MAR: {self._bio_state.mar.value:.2f}"
+        self._oral_telemetry_hud.render(
+            frame,
+            initial_pos,
+            size,
+            self._bio_state.mar.value,
+            self._bio_state.mar.history,
+        )
+        
+    def _calculate_landmarks(self, frame: cv2.Mat, ts_ms: int):
+        result = self._landmarker.detect_for_video(
+            mp.Image(
+                image_format=mp.ImageFormat.SRGB,
+                data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB),
+            ),
+            ts_ms,
+        )
+        return result.face_landmarks[0] if result.face_landmarks else None
 
     def render(self, frame: cv2.Mat):
         if not self._is_setup_complete():
-            raise RuntimeError("HUD setup is not complete. Please call setup_hud() before rendering.")
+            raise RuntimeError("HUD setup is not complete. Please call setup() before rendering.")
         
-        time_now = time.time()
-        fps = 1.0 / (time_now - self.prev_frame_time) if self.prev_frame_time else 0.0
+        time_now = time.monotonic()
+        dt = max(time_now - self.prev_frame_time, 1e-6) if self.prev_frame_time is not None else 0.0
+        fps = 1.0 / dt if dt > 0.0 else 0.0
         self.prev_frame_time = time_now
+        self._last_ts_ms = max(self._last_ts_ms + 1, int(time_now * 1000))
         
         frame_canvas = FrameCanvas(frame, resize_frame=self.resize_frame)
+        
+        face_landmarks = self._calculate_landmarks(frame_canvas.canvas, self._last_ts_ms)
+        self._bio_state = self._biometric_tracker.update(face_landmarks, frame_canvas.size, time_now)
         
         self._render_title_bar(frame_canvas, fps)
         self._render_ocular_oral_telemetry(frame_canvas)

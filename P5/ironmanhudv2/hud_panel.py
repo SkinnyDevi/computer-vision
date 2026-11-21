@@ -32,7 +32,7 @@ class HUDPanel:
     def _draw_rounded_corners(self, frame: FrameCanvas, corner_radius: int = 10, accent_color: tuple[int, int, int] = (95, 115, 130)):
         # Draw rounded corners for the HUD panel
         p1, p2 = get_rectangle_draw_points(self.position, self.size)
-        corner_radius = min(max(corner_radius, int(min(self.size.width, self.size.height) * 0.08)), self.size.width // 2, self.size.height // 2)  # Ensure a minimum corner radius
+        corner_radius = int(min(max(corner_radius, int(min(self.size.width, self.size.height) * 0.08)), self.size.width // 2, self.size.height // 2))  # Ensure a minimum corner radius
         corner_points = (
             (p1[0], p1[1], 1, 1), 
             (p2[0], p1[1], -1, 1), 
