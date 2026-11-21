@@ -1,6 +1,5 @@
-from curses.panel import panel
-
 import cv2
+import time
 
 from ironmanhudv2.frame_canvas import FrameCanvas
 from ironmanhudv2.hud_panel import HUDPanel
@@ -12,12 +11,43 @@ class IronManHUDRenderer:
     def __init__(self, resize_frame: tuple[int, int] = None):
         self.resize_frame = Size(*resize_frame) if resize_frame else None
         
+        self.prev_frame_time = None
+        
         self._ocular_telemetry_hud = None
         self._oral_telemetry_hud = None
 
-    def _render_title_bar(self, frame: FrameCanvas):
-        pass
-    
+    def _render_title_bar(self, frame: FrameCanvas, fps: float):
+        panel_pos = Point(10, 10).scale(frame.ui_scale)
+        panel_size = Size(frame.width - 20, 30).scale(frame.ui_scale)
+        
+        panel = HUDPanel(panel_pos, panel_size)
+        panel.render(frame)
+        
+        # Title
+        text_offset = Point(15, 22).scale(frame.ui_scale)
+        panel_text_pos = panel_pos + text_offset
+        cv2.putText(
+            frame.canvas,
+            "IRONMAN HUD V2",
+            panel_text_pos.to_int_tuple(),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6 * frame.ui_scale,
+            (255, 255, 255),
+            2,
+        )
+        
+        # Other Metrics
+        other_metrics_offset = Point(panel_size.width - 50, 29).scale(frame.ui_scale)
+        cv2.putText(
+            frame.canvas,
+            f"FPS: {fps:.0f}",
+            other_metrics_offset.to_int_tuple(),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4 * frame.ui_scale,
+            (255, 255, 0),
+            1,
+        )
+
     def _blink_label(self, frame: FrameCanvas, position: Point, size: Size):
         MOCK_BLINK_COUNT = 5  # Placeholder for the actual blink count
         MOCK_BLINK_BPM = 12  # Placeholder for the actual blink BPM
@@ -52,11 +82,6 @@ class IronManHUDRenderer:
         return lambda frame, pos, size: func(frame, pos, size)
     
     def _prepare_ocular_telemetry(self):
-        # Draw section title "Ocular Telemetry"
-        # Calculate EAR (Eye Aspect Ratio)
-        # Draw a label "EAR: {value_EAR:.2f}" on the HUD
-        # Draw a progress bar next to label with indication threshold
-        # Draw below the label and progress bar a time series graph of EAR values over time
         MOCK_VALUE = 0.142  # Placeholder for the actual EAR value
         MOCK_THRESHOLD = 0.3  # Placeholder for the actual threshold value
         MOCK_MAX_VALUE = 0.8  # Placeholder for the actual max value for normalization
@@ -108,11 +133,6 @@ class IronManHUDRenderer:
         )
     
     def _prepare_oral_telemetry(self):
-        # Draw section title "Oral Telemetry"
-        # Calculate MAR (Mouth Aspect Ratio)
-        # Draw a label "MAR: {value_MAR:.2f}" on the HUD
-        # Draw a progress bar next to label with indication threshold
-        # Draw below the label and progress bar a time series graph of MAR values over time
         MOCK_VALUE = 0.093  # Placeholder for the actual EAR value
         MOCK_THRESHOLD = 0.3  # Placeholder for the actual threshold value
         MOCK_MAX_VALUE = 1.0  # Placeholder for the actual max value for normalization
@@ -150,6 +170,7 @@ class IronManHUDRenderer:
     def setup(self):
         self._ocular_telemetry_hud = self._prepare_ocular_telemetry()
         self._oral_telemetry_hud = self._prepare_oral_telemetry()
+        self.prev_frame_time = time.time()
         
     def _is_setup_complete(self) -> bool:
         if self._ocular_telemetry_hud is None:
@@ -157,7 +178,7 @@ class IronManHUDRenderer:
         
         if self._oral_telemetry_hud is None:
             return False
-    
+        
         return True
 
     def _render_ocular_oral_telemetry(self, frame: FrameCanvas):
@@ -181,9 +202,13 @@ class IronManHUDRenderer:
         if not self._is_setup_complete():
             raise RuntimeError("HUD setup is not complete. Please call setup_hud() before rendering.")
         
+        time_now = time.time()
+        fps = 1.0 / (time_now - self.prev_frame_time) if self.prev_frame_time else 0.0
+        self.prev_frame_time = time_now
+        
         frame_canvas = FrameCanvas(frame, resize_frame=self.resize_frame)
         
-        #self._render_title_bar()
+        self._render_title_bar(frame_canvas, fps)
         self._render_ocular_oral_telemetry(frame_canvas)
         
         return frame_canvas.canvas

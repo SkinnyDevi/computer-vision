@@ -13,15 +13,7 @@ class HUDPanel:
         self.position = position
         self.size = size
         
-    def _draw_bg(self, frame: FrameCanvas):
-        # Draw the background of the HUD panel
-        p1, p2 = get_rectangle_draw_points(self.position, self.size)
-        cv2.rectangle(frame.canvas,
-                      p1, p2,
-                      (12, 16, 22),  # Dark gray background color
-                      -1)
-    
-    def _add_transparency(self, frame: FrameCanvas, alpha: float = 0.74):
+    def _add_transparent_bg(self, frame: FrameCanvas, alpha: float = 0.74):
         # Add transparency to the HUD panel
         overlay = frame.canvas_copy()
         p1, p2 = get_rectangle_draw_points(self.position, self.size)
@@ -40,7 +32,7 @@ class HUDPanel:
     def _draw_rounded_corners(self, frame: FrameCanvas, corner_radius: int = 10, accent_color: tuple[int, int, int] = (95, 115, 130)):
         # Draw rounded corners for the HUD panel
         p1, p2 = get_rectangle_draw_points(self.position, self.size)
-        corner_radius = max(corner_radius, int((p2[0] - p1[0]) * 0.08))  # Ensure a minimum corner radius
+        corner_radius = min(max(corner_radius, int(min(self.size.width, self.size.height) * 0.08)), self.size.width // 2, self.size.height // 2)  # Ensure a minimum corner radius
         corner_points = (
             (p1[0], p1[1], 1, 1), 
             (p2[0], p1[1], -1, 1), 
@@ -54,8 +46,7 @@ class HUDPanel:
 
     def render(self, frame: FrameCanvas):
         # Render the HUD panel on the canvas
-        # self._draw_bg(frame)
-        self._add_transparency(frame)
+        self._add_transparent_bg(frame)
         self._draw_borders(frame)
         self._draw_rounded_corners(frame)
         

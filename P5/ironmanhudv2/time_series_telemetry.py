@@ -199,7 +199,7 @@ class TimeSeriesTelemetryHUD:
             self.title,
             position.to_int_tuple(),  # Position of the title
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.7 * frame.ui_scale,  # Scale the font size based on UI scale
+            0.6 * frame.ui_scale,  # Scale the font size based on UI scale
             (255, 255, 255),  # White color for the title
             2,
             cv2.LINE_AA
