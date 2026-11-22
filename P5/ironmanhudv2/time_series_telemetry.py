@@ -195,13 +195,13 @@ class TimeSeriesTelemetryHUD:
         self.time_series_graph = time_series_graph
         self.additional_graphs_render = additional_graphs_render
         
-    def _render_title(self, frame: FrameCanvas, position: Point, border_margin: int = 10):
+    def _render_title(self, frame: FrameCanvas, position: Point):
         cv2.putText(
             frame.canvas,
             self.title,
-            position.to_int_tuple(),  # Position of the title
+            position.to_int_tuple(),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.6 * frame.ui_scale,  # Scale the font size based on UI scale
+            0.55 * frame.ui_scale,
             (255, 255, 255),  # White color for the title
             2,
             cv2.LINE_AA
@@ -214,20 +214,19 @@ class TimeSeriesTelemetryHUD:
         size: Size,
         progress_bar_value: float
     ):
-        # Render the label with the current value
         cv2.putText(
             frame.canvas,
             self.label,
             position.to_int_tuple(),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.5 * frame.ui_scale,  # Scale the font size based on UI scale
+            0.5 * frame.ui_scale,
             (255, 255, 255),  # White color for the label
             1,
             cv2.LINE_AA
         )
         
         # Render the progress bar next to the label
-        progress_bar_size = Size(150, 15)  # Adjust size as needed
+        progress_bar_size = Size(150, 15)
         progress_bar_position = Point(position.x + size.width - progress_bar_size.width - 20, position.y - (progress_bar_size.height // 1.2))  # Adjust position as needed
         self.progress_bar.render(frame, progress_bar_position, progress_bar_size, progress_bar_value)
     
@@ -238,21 +237,19 @@ class TimeSeriesTelemetryHUD:
                progress_bar_value: float,
                time_series_values: list[float]
         ):
-        # Render the title of the HUD
-        # Render the label with the current value
         initial_pos = position * 1 # create a copy
         
         initial_pos.y += 20 * frame.ui_scale 
         self._render_title(frame, initial_pos)
-        initial_pos.y += 30 * frame.ui_scale  # Move down for the label and progress bar
+        initial_pos.y += 30 * frame.ui_scale
         
         self._render_label_with_progress_bar(frame, initial_pos, size, progress_bar_value)
-        initial_pos.y += 20 * frame.ui_scale  # Move down for the time series graph
+        initial_pos.y += 20 * frame.ui_scale
         
         graph_size = Size(size.width - 20, 80)
         self.time_series_graph.render(frame, initial_pos, graph_size, time_series_values)
-        initial_pos.y += graph_size.height + 20 * frame.ui_scale  # Move down for additional graphs
+        initial_pos.y += graph_size.height + 20 * frame.ui_scale
         
         for render_func in self.additional_graphs_render:
             render_func(frame, initial_pos, size)
-            initial_pos.y += 25 * frame.ui_scale  # Move down for the next graph
+            initial_pos.y += 25 * frame.ui_scale

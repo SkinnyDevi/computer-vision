@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from ironmanhudv2.units import Point, Size
+from ironmanhudv2.units import Size
 
 class FrameCanvas:
     """

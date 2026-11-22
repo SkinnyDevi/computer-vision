@@ -11,10 +11,13 @@ def euclid_dist(a: np.ndarray, b: np.ndarray) -> float:
 def exp_moving_avg(prev: float | None, curr: float, alpha: float):
     """
     Computes the exponential moving average of the current value and the previous value.
-    If the previous value is None, it returns the current value.
+    If the previous value is `None`, it returns the current value.
     
-    Smooth a time series by giving more weight
+    Smoothes a time series by giving more weight
     to recent observations and making older ones less relevant.
+    
+    - The greater the alpha: more weight is given to new values.
+    - The smaller the alpha: more weight is given to older values.
     """
     
     if prev is None:

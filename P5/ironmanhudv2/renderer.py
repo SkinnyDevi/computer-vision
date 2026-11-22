@@ -5,6 +5,7 @@ import mediapipe as mp
 from ironmanhudv2.biometry_engine.biometric_state import BiometricState
 from ironmanhudv2.biometry_engine.tracker import BiometricTracker
 from ironmanhudv2.frame_canvas import FrameCanvas
+from ironmanhudv2.head_pose3d_telemetry import HeadPose3DTelemetry
 from ironmanhudv2.hud_panel import HUDPanel
 from ironmanhudv2.time_series_telemetry import ThresholdProgressBar, TimeSeriesGraph, TimeSeriesTelemetryHUD
 from ironmanhudv2.units import Point, Size
@@ -15,6 +16,18 @@ FaceLandmarker = mp.tasks.vision.FaceLandmarker
 FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
 
 class IronManHUDRenderer:
+    def __enter__(self):
+            return self
+    
+    def __exit__(self):
+        self.close()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+    
     def __init__(self, resize_frame: tuple[int, int] = None):
         self.resize_frame = Size(*resize_frame) if resize_frame else None
         
@@ -26,6 +39,7 @@ class IronManHUDRenderer:
         self._landmarker = None
         self._ocular_telemetry_hud = None
         self._oral_telemetry_hud = None
+        self._head_pose_telemetry = None 
         
         self._bio_state: BiometricState = BiometricState()
 
@@ -67,9 +81,9 @@ class IronManHUDRenderer:
         cv2.putText(
             frame.canvas,
             f"BLINKS: {blink_count} | BPM: {blink_bpm:.2f}",
-            position.to_int_tuple(),  # Position of the label
+            position.to_int_tuple(),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.45 * frame.ui_scale,  # Scale the font size based on UI scale
+            0.45 * frame.ui_scale,
             (255, 255, 255),  # White color for the label
             1,
             cv2.LINE_AA
@@ -79,13 +93,12 @@ class IronManHUDRenderer:
         MOCK_EYE_MICRO_SLEEP_SEC = 2.5  # Placeholder for the actual microsleep duration
 
         closed_duration = self._bio_state.ear.eye_closed_duration
-        
         cv2.putText(
             frame.canvas,
             f"EYE CLOSURE: {closed_duration:4.2f}s / {MOCK_EYE_MICRO_SLEEP_SEC:.1f}s",  # Placeholder for the actual eye closure value
-            position.to_int_tuple(),  # Position of the label
+            position.to_int_tuple(),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.45 * frame.ui_scale,  # Scale the font size based on UI scale
+            0.45 * frame.ui_scale,
             (255, 255, 255),  # White color for the label
             1,
             cv2.LINE_AA
@@ -112,15 +125,13 @@ class IronManHUDRenderer:
             self._format_data_label_callable(self._eye_closure_label)
         ]
         
-        ocular_telemetry_hud = TimeSeriesTelemetryHUD(
+        return TimeSeriesTelemetryHUD(
             title="OCULAR TELEMETRY",
             label=f"EAR: {0:.2f}", # PLACEHOLDER
             progress_bar=progress_bar,
             time_series_graph=time_series_graph,
             additional_graphs_render=additional_data_labels
         )
-        
-        return ocular_telemetry_hud        
     
     def _yawn_counter_label(self, frame: FrameCanvas, position: Point, size: Size):
         MOCK_YAWN_STATE = "NORMAL"
@@ -128,7 +139,7 @@ class IronManHUDRenderer:
         yawn_count = self._bio_state.mar.yawn_count
         cv2.putText(
             frame.canvas,
-            f"YAWNS: {yawn_count} [{MOCK_YAWN_STATE}]",  # Placeholder for the actual yawn count
+            f"YAWNS: {yawn_count} [{MOCK_YAWN_STATE}]",
             position.to_int_tuple(),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45 * frame.ui_scale,
@@ -154,22 +165,29 @@ class IronManHUDRenderer:
             self._format_data_label_callable(self._yawn_counter_label),
         ]
         
-        ocular_telemetry_hud = TimeSeriesTelemetryHUD(
+        return TimeSeriesTelemetryHUD(
             title="ORAL / FATIGUE TELEMETRY",
-            label=f"MAR: {0:.2f}", # PLACEHOLDER
+            label=f"MAR: {0:.2f}",
             progress_bar=progress_bar,
             time_series_graph=time_series_graph,
             additional_graphs_render=additional_data_labels
         )
-        
-        return ocular_telemetry_hud  
     
+    def _prepare_head_pose_telemetry(self):
+        return HeadPose3DTelemetry()
+
     def setup(self, biometry_config: BiometryConfig):
         self.close()
+        # Setup the renderer with the provided biometry configuration
         self._biometry_config = biometry_config
         self._biometric_tracker = BiometricTracker(biometry_config)
+        
+        # Prepare the telemetry HUDs
         self._ocular_telemetry_hud = self._prepare_ocular_telemetry()
         self._oral_telemetry_hud = self._prepare_oral_telemetry()
+        self._head_pose_telemetry = self._prepare_head_pose_telemetry()
+        
+        # Setup the MediaPipe Face Landmarker
         landmarker_options = FaceLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=self._biometry_config.model_path),
             running_mode=mp.tasks.vision.RunningMode.VIDEO,
@@ -185,18 +203,6 @@ class IronManHUDRenderer:
         if landmarker is not None:
             landmarker.close()
             self._landmarker = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def __del__(self):
-        try:
-            self.close()
-        except Exception:
-            pass
         
     def _is_setup_complete(self) -> bool:
         if self._biometry_config is None or self._biometric_tracker is None or self._landmarker is None:
@@ -241,6 +247,35 @@ class IronManHUDRenderer:
             self._bio_state.mar.history,
         )
         
+    def _render_3d_head_pose_telemetry(self, frame: FrameCanvas):
+        panel_size = Size(300, 200).scale(frame.ui_scale)
+        panel_pos = Point(frame.width - 10 - panel_size.width, 50).scale(frame.ui_scale)
+
+        panel = HUDPanel(panel_pos, panel_size)        
+        panel.render(frame)
+        
+        pos_offset = Point(10, 30).scale(frame.ui_scale)
+        initial_pos = Point(panel_pos.x + pos_offset.x, panel_pos.y + pos_offset.y)
+        component_size = Size(panel_size.width - 20, panel_size.height - 40).scale(frame.ui_scale)
+        
+        cv2.putText(
+            frame.canvas,
+            "3D HEAD POSE TELEMETRY",
+            initial_pos.to_int_tuple(),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55 * frame.ui_scale,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA
+        )
+        
+        self._head_pose_telemetry.render(
+            frame,
+            self._bio_state,
+            initial_pos,
+            component_size
+        )
+        
     def _calculate_landmarks(self, frame: cv2.Mat, ts_ms: int):
         result = self._landmarker.detect_for_video(
             mp.Image(
@@ -268,6 +303,6 @@ class IronManHUDRenderer:
         
         self._render_title_bar(frame_canvas, fps)
         self._render_ocular_oral_telemetry(frame_canvas)
-        
+        self._render_3d_head_pose_telemetry(frame_canvas)
         return frame_canvas.canvas
         
