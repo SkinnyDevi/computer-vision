@@ -1,7 +1,9 @@
 import cv2
+import math
 
 from ironmanhudv2.biometry_engine.biometric_state import BiometricState
 from ironmanhudv2.frame_canvas import FrameCanvas
+from ironmanhudv2.hud_theme import ColorScalar, HUDTheme
 from ironmanhudv2.units import Point, Size
 
 
@@ -51,7 +53,12 @@ class HeadPose3DTelemetry:
             cv2.LINE_AA
         )
         
-    def _draw_radar_background(self, frame: FrameCanvas, position: Point, size: Size):
+    def _draw_radar_background(self, 
+                               frame: FrameCanvas, 
+                               position: Point, 
+                               size: Size,
+                               border_color: ColorScalar=(255, 255, 255)
+    ):
         # Background
         cv2.circle(
             frame.canvas, 
@@ -80,7 +87,7 @@ class HeadPose3DTelemetry:
             (int(position.x + size.width // 2), 
              int(position.y + size.height // 2)),
             int(size.width // 2),
-            (255, 255, 255),
+            border_color,
             1,
             cv2.LINE_AA
         )
@@ -107,8 +114,8 @@ class HeadPose3DTelemetry:
     def _calculate_radar_point(self, state: BiometricState, position: Point, size: Size, pos_multipler: float = 1.0) -> Point:
         # Calculate the radar point based on pitch and yaw
         radar_radius = size.width // 2 // 2  # Inner radar circle radius
-        pitch_rad = state.pitch.value * (3.14159 / 180)  # Convert to radians
-        yaw_rad = state.yaw.value * (3.14159 / 180)  # Convert to radians
+        pitch_rad = state.pitch.value * (math.pi / 180) # Convert to radians
+        yaw_rad = state.yaw.value * (math.pi / 180) # Convert to radians
         
         x_offset = int(radar_radius * yaw_rad) * pos_multipler
         y_offset = int(radar_radius * pitch_rad) * pos_multipler
@@ -121,13 +128,17 @@ class HeadPose3DTelemetry:
         
         return Point(radar_point_x, radar_point_y)
     
-    def _draw_pose_radar_point(self, frame: FrameCanvas, radar_point: Point):
+    def _draw_pose_radar_point(self, 
+                               frame: FrameCanvas, 
+                               radar_point: Point,
+                               dot_color: ColorScalar = (0, 255, 0)
+    ):
         # Center circle
         cv2.circle(
             frame.canvas,
             (int(radar_point.x), int(radar_point.y)),
             5,
-            (0, 255, 0),
+            dot_color,
             -1,
             cv2.LINE_AA
         )
@@ -137,23 +148,32 @@ class HeadPose3DTelemetry:
             frame.canvas,
             (int(radar_point.x), int(radar_point.y)),
             8,
-            (0, 255, 0),
+            dot_color,
             1,
             cv2.LINE_AA
         )
     
-    def _draw_3d_radar(self, frame: FrameCanvas, state: BiometricState, position: Point, size: Size):
-        self._draw_radar_background(frame, position, size)
+    def _draw_3d_radar(self, 
+                       frame: FrameCanvas,
+                       state: BiometricState,
+                       position: Point, 
+                       size: Size,
+                       border_color: ColorScalar = (255, 255, 255),
+                       dot_color: ColorScalar = (0, 255, 0)
+    ):
+        self._draw_radar_background(frame, position, size, border_color)
         self._draw_radar_axis_lines(frame, position, size)
         # Radar point for head position
         radar_pos = self._calculate_radar_point(state, position, size, pos_multipler=1.3)
-        self._draw_pose_radar_point(frame, radar_pos)
+        self._draw_pose_radar_point(frame, radar_pos, dot_color)
             
     def render(self,
                frame: FrameCanvas,
                state: BiometricState,
                position: Point, 
-               size: Size):
+               size: Size,
+               theme: HUDTheme
+    ):
         initial_pos = position * 1 # create a copy
         
         initial_pos.y -= 40 * frame.ui_scale
@@ -168,4 +188,4 @@ class HeadPose3DTelemetry:
         original_position = position * 1
         radar_3d_position = Point(original_position.x + size.width - 110, original_position.y + 20)
         radar_3d_size = Size(90, 90)
-        self._draw_3d_radar(frame, state, radar_3d_position, radar_3d_size)
+        self._draw_3d_radar(frame, state, radar_3d_position, radar_3d_size, theme.accent, theme.radar_point)

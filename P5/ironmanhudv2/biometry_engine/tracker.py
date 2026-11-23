@@ -54,7 +54,7 @@ class BiometricTracker:
                 
             state.ear.eye_closed = True
             state.ear.eye_closed_duration = now - self._eye_closed_start
-            #state.micro_sleep = state.eye_closed_duration >= self.cfg.micro_sleep_seconds
+            state.micro_sleep = state.ear.eye_closed_duration >= self.cfg.params_EAR.micro_sleep_seconds
         else:
             if self._closed_frames >= self.cfg.params_EAR.consec_frames_blink:
                 self.blink_count += 1
