@@ -4,6 +4,7 @@ import mediapipe as mp
 
 from ironmanhudv2.biometry_engine.biometric_state import BiometricState
 from ironmanhudv2.biometry_engine.tracker import BiometricTracker
+from ironmanhudv2.facial_mesh import FacialMeshHUD
 from ironmanhudv2.frame_canvas import FrameCanvas
 from ironmanhudv2.head_pose3d_telemetry import HeadPose3DTelemetry
 from ironmanhudv2.hud_panel import HUDPanel
@@ -40,7 +41,8 @@ class IronManHUDRenderer:
         self._landmarker = None
         self._ocular_telemetry_hud = None
         self._oral_telemetry_hud = None
-        self._head_pose_telemetry = None 
+        self._head_pose_telemetry = None
+        self._facial_mesh = None
         
         self._bio_state: BiometricState = BiometricState()
         self._current_hud_theme: HUDTheme = resolve_hud_theme(self._bio_state, 0.0)
@@ -175,6 +177,9 @@ class IronManHUDRenderer:
     
     def _prepare_head_pose_telemetry(self):
         return HeadPose3DTelemetry()
+    
+    def _prepare_facial_mesh(self):
+        return FacialMeshHUD()
 
     def setup(self, biometry_config: BiometryConfig):
         self.close()
@@ -186,6 +191,7 @@ class IronManHUDRenderer:
         self._ocular_telemetry_hud = self._prepare_ocular_telemetry()
         self._oral_telemetry_hud = self._prepare_oral_telemetry()
         self._head_pose_telemetry = self._prepare_head_pose_telemetry()
+        self._facial_mesh = self._prepare_facial_mesh()
         
         # Setup the MediaPipe Face Landmarker
         landmarker_options = FaceLandmarkerOptions(
@@ -208,11 +214,16 @@ class IronManHUDRenderer:
         if self._biometry_config is None or self._biometric_tracker is None or self._landmarker is None:
             return False
 
-        if self._ocular_telemetry_hud is None:
-            return False
+        init_objects = [
+            self._ocular_telemetry_hud,
+            self._oral_telemetry_hud,
+            self._head_pose_telemetry,
+            self._facial_mesh
+        ]
         
-        if self._oral_telemetry_hud is None:
-            return False
+        for obj in init_objects:
+            if obj is None:
+                return False
         
         return True
 
@@ -305,6 +316,7 @@ class IronManHUDRenderer:
         self._bio_state = self._biometric_tracker.update(face_landmarks, frame_canvas.size, time_now)
         self._current_hud_theme = resolve_hud_theme(self._bio_state, time_now)
         
+        self._facial_mesh.render(frame_canvas, self._current_hud_theme, self._bio_state, time_now)
         self._render_title_bar(frame_canvas, fps)
         self._render_ocular_oral_telemetry(frame_canvas)
         self._render_3d_head_pose_telemetry(frame_canvas)

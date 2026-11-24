@@ -15,7 +15,7 @@ class FrameCanvas:
         self._aspect_ratio = w / h
         self._ui_scale = 1.0
         
-        self._canvas = frame.copy()
+        self._canvas = cv2.flip(frame.copy(), 1)
         
         if resize_frame is not None:
             self._width, self._height = resize_frame.to_tuple()
