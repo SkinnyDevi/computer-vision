@@ -1,9 +1,16 @@
+from pathlib import Path
+
 import cv2
 import time
 import mediapipe as mp
+import torch
 
 from ironmanhudv2.biometry_engine.biometric_state import BiometricState
 from ironmanhudv2.biometry_engine.tracker import BiometricTracker
+from ironmanhudv2.emotion_engine.emotion_engine import EmotionEngine
+from ironmanhudv2.biometry_engine.engine_config import BiometryConfig
+
+from ironmanhudv2.emotion_engine.emotion_telemetry_hud import EmotionTelemetryHUD
 from ironmanhudv2.facial_mesh import FacialMeshHUD
 from ironmanhudv2.frame_canvas import FrameCanvas
 from ironmanhudv2.head_pose3d_telemetry import HeadPose3DTelemetry
@@ -11,7 +18,6 @@ from ironmanhudv2.hud_panel import HUDPanel
 from ironmanhudv2.hud_theme import resolve_hud_theme, HUDTheme
 from ironmanhudv2.time_series_telemetry import ThresholdProgressBar, TimeSeriesGraph, TimeSeriesTelemetryHUD
 from ironmanhudv2.units import Point, Size
-from ironmanhudv2.biometry_engine.engine_config import BiometryConfig
 
 BaseOptions = mp.tasks.BaseOptions
 FaceLandmarker = mp.tasks.vision.FaceLandmarker
@@ -44,6 +50,7 @@ class IronManHUDRenderer:
         self._head_pose_telemetry = None
         self._facial_mesh = None
         
+        self._emotion_engine: EmotionEngine | None = None
         self._bio_state: BiometricState = BiometricState()
         self._current_hud_theme: HUDTheme = resolve_hud_theme(self._bio_state, 0.0)
 
@@ -180,6 +187,19 @@ class IronManHUDRenderer:
     
     def _prepare_facial_mesh(self):
         return FacialMeshHUD()
+    
+    def _prepare_emotion_engine(self, bio: BiometryConfig):
+        return EmotionEngine(torch_model=bio.emotion_model_path)
+    
+    def _prepare_emotion_telemetry(self, bio: BiometryConfig):
+        return EmotionTelemetryHUD(
+            title="EMOTION TELEMETRY",
+            threshold=bio.emotion_conf_threshold,
+            bar_height=12,
+            row_spacing=24,
+            sort_by_confidence=True,
+            max_emotions=7
+        )
 
     def setup(self, biometry_config: BiometryConfig):
         self.close()
@@ -187,11 +207,15 @@ class IronManHUDRenderer:
         self._biometry_config = biometry_config
         self._biometric_tracker = BiometricTracker(biometry_config)
         
+        # Setup the emotion engine with the provided model path
+        self._emotion_engine = self._prepare_emotion_engine(biometry_config)
+        
         # Prepare the telemetry HUDs
         self._ocular_telemetry_hud = self._prepare_ocular_telemetry()
         self._oral_telemetry_hud = self._prepare_oral_telemetry()
         self._head_pose_telemetry = self._prepare_head_pose_telemetry()
         self._facial_mesh = self._prepare_facial_mesh()
+        self._emotion_telemetry_hud = self._prepare_emotion_telemetry(biometry_config)
         
         # Setup the MediaPipe Face Landmarker
         landmarker_options = FaceLandmarkerOptions(
@@ -289,6 +313,15 @@ class IronManHUDRenderer:
             component_size,
             self._current_hud_theme
         )
+        
+        self._emotion_telemetry_hud.render(
+            frame,
+            Point(panel_pos.x, initial_pos.y + component_size.height + (20 * frame.ui_scale)),
+            self._emotion_engine.get_confidence_for_emotions(frame, self._bio_state.bbox),
+            self._current_hud_theme,
+            size=Size(panel_size.width, 150).scale(frame.ui_scale),
+        )
+        
         
     def _calculate_landmarks(self, frame: cv2.Mat, ts_ms: int):
         result = self._landmarker.detect_for_video(
