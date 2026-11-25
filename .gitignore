@@ -30,4 +30,7 @@ P4/P4a/runs/detect/runs_plate/plate_detector*/test_eval
 !rtdetr*.png
 !rtdetr*.jpg
 
+#Deepface
+.deepface_cache
+
 !P4/P4a/results/*
