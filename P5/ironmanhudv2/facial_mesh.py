@@ -8,7 +8,14 @@ from ironmanhudv2.frame_canvas import FrameCanvas
 from ironmanhudv2.hud_theme import ColorScalar, HUDTheme
 from ironmanhudv2.math import euclid_dist
 from ironmanhudv2.biometry_engine.biometric_state import BiometricState
-from ironmanhudv2.biometry_engine.mediapipe_constants import LEFT_IRIS_IDX, RIGHT_IRIS_IDX
+from ironmanhudv2.biometry_engine.mediapipe_constants import (
+    LEFT_HALF_FACE_MESH_CONNECTIONS,
+    LEFT_HALF_FACE_MESH_IDXS,
+    LEFT_IRIS_IDX,
+    RIGHT_HALF_FACE_MESH_CONNECTIONS,
+    RIGHT_HALF_FACE_MESH_IDXS,
+    RIGHT_IRIS_IDX,
+)
 from ironmanhudv2.units import Point
 
 @dataclass
@@ -99,6 +106,73 @@ class FacialMeshHUD:
                 theme.primary,
             )
             
+    def _draw_half_face_mesh(
+        self,
+        frame: FrameCanvas,
+        pts: np.ndarray,
+        color: ColorScalar,
+        side: Literal['left', 'right'],
+        line_alpha: float = 0.35,
+        node_alpha: float = 0.75,
+    ) -> None:
+        """Draw a connected dot-and-line HUD wireframe over one half of the detected face."""
+        if pts is None or len(pts) == 0:
+            return
+
+        if side == 'right':
+            node_idxs = RIGHT_HALF_FACE_MESH_IDXS
+            connections = RIGHT_HALF_FACE_MESH_CONNECTIONS
+        elif side == 'left':
+            node_idxs = LEFT_HALF_FACE_MESH_IDXS
+            connections = LEFT_HALF_FACE_MESH_CONNECTIONS
+        else:
+            raise ValueError(f"Unsupported half-face mesh side: {side!r}")
+
+        if len(pts) <= max(node_idxs):
+            return
+
+        coords = {
+            idx: Point(pts[idx][0], pts[idx][1]).to_int_tuple()
+            for idx in node_idxs
+        }
+
+        line_thickness = max(1, int(round(frame.ui_scale)))
+        dot_radius = max(2, int(round(2.5 * frame.ui_scale)))
+        halo_radius = dot_radius + max(2, int(round(2.0 * frame.ui_scale)))
+
+        overlay = frame.canvas_copy()
+        for start_idx, end_idx in connections:
+            cv2.line(
+                overlay,
+                coords[start_idx],
+                coords[end_idx],
+                color,
+                line_thickness,
+                cv2.LINE_AA,
+            )
+        for idx in node_idxs:
+            cv2.circle(
+                overlay,
+                coords[idx],
+                halo_radius,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+        cv2.addWeighted(overlay, line_alpha, frame.canvas, 1.0 - line_alpha, 0.0, frame.canvas)
+
+        node_overlay = frame.canvas_copy()
+        for idx in node_idxs:
+            cv2.circle(
+                node_overlay,
+                coords[idx],
+                dot_radius,
+                color,
+                -1,
+                cv2.LINE_AA,
+            )
+        cv2.addWeighted(node_overlay, node_alpha, frame.canvas, 1.0 - node_alpha, 0.0, frame.canvas)
+            
     def render(self, 
                frame: FrameCanvas, 
                theme: HUDTheme, 
@@ -125,3 +199,10 @@ class FacialMeshHUD:
             bio_state.pts_2d * frame.ui_scale, 
             phase_deg=phase_deg,
             eye='right')
+        
+        # Draw half face mesh
+        self._draw_half_face_mesh(
+            frame, 
+            bio_state.pts_2d * frame.ui_scale, 
+            color=theme.primary, 
+            side='left')
