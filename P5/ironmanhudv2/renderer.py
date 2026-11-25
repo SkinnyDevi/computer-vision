@@ -28,7 +28,7 @@ class IronManHUDRenderer:
     def __enter__(self):
             return self
     
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
     def __del__(self):
@@ -56,6 +56,10 @@ class IronManHUDRenderer:
         self._emotion_engine: EmotionEngine | None = None
         self._bio_state: BiometricState = BiometricState()
         self._current_hud_theme: HUDTheme = resolve_hud_theme(self._bio_state, 0.0)
+        self._pose_offset = None
+        self._calibration_message: str | None = None
+        self._calibration_message_color: tuple[int, int, int] = (0, 255, 0)
+        self._calibration_message_until: float = 0.0
 
     def _render_title_bar(self, frame: FrameCanvas, fps: float):
         panel_pos = Point(10, 10).scale(frame.ui_scale)
@@ -237,6 +241,10 @@ class IronManHUDRenderer:
         self._landmarker = FaceLandmarker.create_from_options(landmarker_options)
         self.prev_frame_time = time.monotonic()
         self._last_ts_ms = 0
+        self._pose_offset = None
+        self._calibration_message = None
+        self._calibration_message_color = (0, 255, 0)
+        self._calibration_message_until = 0.0
 
     def close(self) -> None:
         landmarker = getattr(self, "_landmarker", None)
@@ -297,7 +305,7 @@ class IronManHUDRenderer:
             self._current_hud_theme
         )
         
-    def _render_3d_head_pose_telemetry(self, frame: FrameCanvas):
+    def _render_3d_head_pose_telemetry(self, frame: FrameCanvas, time_now: float):
         panel_size = Size(300, 200).scale(frame.ui_scale)
         panel_pos = Point(frame.width - 10 - panel_size.width, 50).scale(frame.ui_scale)
 
@@ -326,6 +334,31 @@ class IronManHUDRenderer:
             component_size,
             self._current_hud_theme
         )
+
+        if self._calibration_message and time_now <= self._calibration_message_until:
+            cal_text = self._calibration_message
+            cal_color = self._calibration_message_color
+        elif self._pose_offset is not None:
+            cal_text = f"CAL P{self._pose_offset[0]:+.0f} Y{self._pose_offset[1]:+.0f} R{self._pose_offset[2]:+.0f} [C]"
+            cal_color = (180, 210, 220)
+        else:
+            cal_text = "[C] Calibrate neutral pose"
+            cal_color = (160, 180, 195)
+
+        cal_pos = Point(
+            panel_pos.x + 10 * frame.ui_scale,
+            panel_pos.y + panel_size.height - 12 * frame.ui_scale,
+        )
+        cv2.putText(
+            frame.canvas,
+            cal_text,
+            cal_pos.to_int_tuple(),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38 * frame.ui_scale,
+            cal_color,
+            1,
+            cv2.LINE_AA,
+        )
         
         self._emotion_telemetry_hud.render(
             frame,
@@ -350,7 +383,31 @@ class IronManHUDRenderer:
         state = self._bio_state
         if state.micro_sleep or state.looking_away or state.mar.yawning:
             self._audio_alarm.trigger(now)
-        
+            
+    def register_calibration(self):
+        if self._biometric_tracker is None:
+            return None
+
+        offset = self._biometric_tracker.calibrate_pose()
+        now = time.monotonic()
+        if offset is None:
+            self._calibration_message = "NO FACE - CANNOT CALIBRATE"
+            self._calibration_message_color = (0, 180, 255)
+            self._calibration_message_until = now + 2.5
+            return None
+
+        self._pose_offset = offset
+        self._bio_state.pitch.value = 0.0
+        self._bio_state.yaw.value = 0.0
+        self._bio_state.roll.value = 0.0
+        self._bio_state.nodding_off = False
+        self._bio_state.nod_duration = 0.0
+        self._bio_state.looking_away = False
+        self._bio_state.looking_away_duration = 0.0
+        self._calibration_message = f"CALIBRATED P{offset[0]:+.1f} Y{offset[1]:+.1f} R{offset[2]:+.1f}"
+        self._calibration_message_color = (0, 255, 0)
+        self._calibration_message_until = now + 2.5
+        return offset
 
     def render(self, frame: cv2.Mat):
         if not self._is_setup_complete():
@@ -371,7 +428,7 @@ class IronManHUDRenderer:
         self._facial_mesh.render(frame_canvas, self._current_hud_theme, self._bio_state, time_now)
         self._render_title_bar(frame_canvas, fps)
         self._render_ocular_oral_telemetry(frame_canvas)
-        self._render_3d_head_pose_telemetry(frame_canvas)
+        self._render_3d_head_pose_telemetry(frame_canvas, time_now)
         self._trigger_audio_alarm(time_now)
         return frame_canvas.canvas
         

@@ -23,6 +23,8 @@ class BiometricTracker:
         self._pose_ema: np.ndarray | None = None
         self._pose_offset = np.zeros(3, dtype=np.float64)
         self._last_raw_pose = np.zeros(3, dtype=np.float64)
+        self._has_valid_pose: bool = False
+        self._is_calibrated: bool = False
 
         self._closed_frames = 0
         self._eye_closed_start: float | None = None
@@ -41,10 +43,20 @@ class BiometricTracker:
     def extract_landmarks_2d(self, face_landmarks, size: Size) -> np.ndarray:
         return np.array([[lm.x * size.width, lm.y * size.height] for lm in face_landmarks], dtype=np.float64)
 
-    def calibrate_pose(self) -> np.ndarray:
+    @property
+    def is_calibrated(self) -> bool:
+        return self._is_calibrated
+
+    def calibrate_pose(self) -> np.ndarray | None:
+        if not self._has_valid_pose:
+            return None
+
         self._pose_offset = self._last_raw_pose.copy()
         self._pose_ema = np.zeros(3, dtype=np.float64)
-        return self._pose_offset
+        self._nod_start = None
+        self._away_start = None
+        self._is_calibrated = True
+        return self._pose_offset.copy()
     
     def _update_blink_counter(self, state: BiometricState, now: float) -> None:
         if state.ear.raw < self.cfg.params_EAR.threshold:
@@ -179,10 +191,12 @@ class BiometricTracker:
         raw_p, raw_y, raw_r, rvec, tvec, cam_mat, dist = self.solve_head_pose_pnp(pts_2d, size)
         raw_vec = np.array([raw_p, raw_y, raw_r], dtype=np.float64)
         self._last_raw_pose = raw_vec
+        self._has_valid_pose = True
         
+        rel_pose = ((raw_vec - self._pose_offset + 180.0) % 360.0) - 180.0
         self._pose_ema = exp_moving_avg(
             self._pose_ema, 
-            raw_vec - self._pose_offset, 
+            rel_pose, 
             self.cfg.params_pose3D.exp_moving_avg_alpha
         )
 
@@ -198,6 +212,7 @@ class BiometricTracker:
         state.mar.yawn_count = self.yawn_count
 
         if not face_landmarks:
+            self._has_valid_pose = False
             self.ear_history.append(0.0)
             self.mar_history.append(0.0)
         else:
