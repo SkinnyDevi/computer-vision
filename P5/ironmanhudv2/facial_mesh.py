@@ -9,9 +9,12 @@ from ironmanhudv2.hud_theme import ColorScalar, HUDTheme
 from ironmanhudv2.math import euclid_dist
 from ironmanhudv2.biometry_engine.biometric_state import BiometricState
 from ironmanhudv2.biometry_engine.mediapipe_constants import (
+    FACE_MIDLINE_IDXS,
+    LEFT_EYE_IDXS,
     LEFT_HALF_FACE_MESH_CONNECTIONS,
     LEFT_HALF_FACE_MESH_IDXS,
     LEFT_IRIS_IDX,
+    RIGHT_EYE_IDXS,
     RIGHT_HALF_FACE_MESH_CONNECTIONS,
     RIGHT_HALF_FACE_MESH_IDXS,
     RIGHT_IRIS_IDX,
@@ -47,17 +50,20 @@ class FacialMeshHUD:
             _EyeReticleCircleArtifact(radius=int(radius * 1.6), offset=[90.0], thickness=2, phase_offset=0.4)
         ]
         
+        thickness_scale = float(np.clip(radius / 32.0, 0.5, 1.5))
+
         for circle in circles:
             if circle.radius <= 0:
                 continue
             
+            thickness = max(1, int(round(circle.thickness * thickness_scale)))
             if len(circle.offset) == 0:
                 cv2.circle(
                     frame.canvas, 
                     (cx, cy), 
                     circle.radius, 
                     color, 
-                    circle.thickness, 
+                    thickness, 
                     cv2.LINE_AA
                 )
             else:
@@ -71,9 +77,29 @@ class FacialMeshHUD:
                         phase + offset, 
                         phase + offset + 76.0, 
                         color, 
-                        circle.thickness, 
+                        thickness, 
                         cv2.LINE_AA
                     )
+
+    def _compute_reticle_radius(
+        self,
+        frame: FrameCanvas,
+        pts: np.ndarray,
+        eye_outer_idx: int,
+        eye_inner_idx: int,
+    ) -> int:
+        # Calculate radius based on face distance 
+        face_height = euclid_dist(pts[FACE_MIDLINE_IDXS[0]], pts[FACE_MIDLINE_IDXS[-1]])
+        inter_ocular = euclid_dist(pts[RIGHT_EYE_IDXS[0]], pts[LEFT_EYE_IDXS[3]])
+        eye_width = euclid_dist(pts[eye_outer_idx], pts[eye_inner_idx])
+
+        face_scale_radius = max(face_height * 0.105, inter_ocular * 0.21)
+        eye_scale_radius = eye_width * 0.62
+        raw_radius = 0.65 * face_scale_radius + 0.35 * eye_scale_radius
+
+        min_radius = max(8, int(round(8 * frame.ui_scale)))
+        max_radius = max(min_radius, int(min(frame.width, frame.height) * 0.22))
+        return int(np.clip(round(raw_radius), min_radius, max_radius))
     
     def _draw_ocular_reticles(self, 
                              frame: FrameCanvas, 
@@ -85,8 +111,7 @@ class FacialMeshHUD:
             return
         
         if eye in ['left', 'both']:
-            dist_l = euclid_dist(pts[33], pts[133]) * 0.42
-            radius_l = max(32, int(dist_l))
+            radius_l = self._compute_reticle_radius(frame, pts, LEFT_EYE_IDXS[3], LEFT_EYE_IDXS[0])
             self._draw_eye_reticle(
                 frame,
                 Point(pts[LEFT_IRIS_IDX][0], pts[LEFT_IRIS_IDX][1]),
@@ -96,8 +121,7 @@ class FacialMeshHUD:
             )
         
         if eye in ['right', 'both']:
-            dist_r = euclid_dist(pts[362], pts[263]) * 0.42
-            radius_r = max(32, int(dist_r))
+            radius_r = self._compute_reticle_radius(frame, pts, RIGHT_EYE_IDXS[0], RIGHT_EYE_IDXS[3])
             self._draw_eye_reticle(
                 frame,
                 Point(pts[RIGHT_IRIS_IDX][0], pts[RIGHT_IRIS_IDX][1]),
