@@ -26,5 +26,5 @@
   "val_loss": 1.2233392629254698,
   "val_accuracy": 0.6896551724137931,
   "val_f1_macro": 0.6723677445752182,
-  "train_minutes": 9.8
+  "train_minutes": 9.9
 }

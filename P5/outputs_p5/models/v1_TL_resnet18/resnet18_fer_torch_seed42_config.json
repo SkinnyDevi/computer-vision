@@ -1,0 +1,15 @@
+{
+  "framework": "pytorch",
+  "backbone": "resnet18",
+  "seed": 42,
+  "tl_img_size": 112,
+  "warmup_epochs": 5,
+  "finetune_epochs": 35,
+  "epochs_run": 30,
+  "best_epoch": 20,
+  "val_acc_no_tta": 0.6818181818181818,
+  "val_f1_no_tta": 0.6640941480579946,
+  "val_acc_tta": 0.6877394636015326,
+  "val_f1_tta": 0.6692772634281371,
+  "train_minutes": 5.9
+}

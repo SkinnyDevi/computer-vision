@@ -1,0 +1,8 @@
+{
+  "n": 1000,
+  "elapsed_sec": 5.045223288998386,
+  "ms_img": 5.045223288998386,
+  "detector_backend": "skip",
+  "accuracy": 0.559,
+  "f1_macro": 0.5455375336382773
+}
