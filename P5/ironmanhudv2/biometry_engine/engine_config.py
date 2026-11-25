@@ -25,8 +25,6 @@ class ParamPose3D:
 class BiometryConfig:
     model_path: str = "face_landmarker.task"
     emotion_model_path: str = "cnn_fer_model.pt"
-    custom_emotion_model_path: str | None = None
-    use_deepface: bool = False  # Activar True para fusión asíncrona con DeepFace
 
     params_EAR: ParamEAR = field(default_factory=ParamEAR)
     params_MAR: ParamMAR = field(default_factory=ParamMAR)
@@ -34,7 +32,6 @@ class BiometryConfig:
 
     emotion_conf_threshold: float = 0.5
 
-    # Alarma sonora e historial visual
     alarm_wav_path: str = "jarvis_alarm.wav"
     alarm_cooldown_seconds: float = 1.8
     history_len: int = 72

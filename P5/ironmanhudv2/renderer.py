@@ -5,6 +5,7 @@ import time
 import mediapipe as mp
 import torch
 
+from ironmanhudv2.alarm_audio import AudioAlarm
 from ironmanhudv2.biometry_engine.biometric_state import BiometricState
 from ironmanhudv2.biometry_engine.tracker import BiometricTracker
 from ironmanhudv2.emotion_engine.emotion_engine import EmotionEngine
@@ -49,7 +50,9 @@ class IronManHUDRenderer:
         self._oral_telemetry_hud = None
         self._head_pose_telemetry = None
         self._facial_mesh = None
+        self._emotion_telemetry_hud = None
         
+        self._audio_alarm = None
         self._emotion_engine: EmotionEngine | None = None
         self._bio_state: BiometricState = BiometricState()
         self._current_hud_theme: HUDTheme = resolve_hud_theme(self._bio_state, 0.0)
@@ -200,12 +203,19 @@ class IronManHUDRenderer:
             sort_by_confidence=True,
             max_emotions=7
         )
+    
+    def _prepare_audio_alarm(self, bio: BiometryConfig):
+        return AudioAlarm(
+            wav_path=bio.alarm_wav_path,
+            cooldown_seconds=bio.alarm_cooldown_seconds
+        )
 
     def setup(self, biometry_config: BiometryConfig):
         self.close()
         # Setup the renderer with the provided biometry configuration
         self._biometry_config = biometry_config
         self._biometric_tracker = BiometricTracker(biometry_config)
+        self._audio_alarm = self._prepare_audio_alarm(biometry_config)
         
         # Setup the emotion engine with the provided model path
         self._emotion_engine = self._prepare_emotion_engine(biometry_config)
@@ -242,7 +252,10 @@ class IronManHUDRenderer:
             self._ocular_telemetry_hud,
             self._oral_telemetry_hud,
             self._head_pose_telemetry,
-            self._facial_mesh
+            self._facial_mesh,
+            self._emotion_telemetry_hud,
+            self._audio_alarm,
+            self._emotion_engine,
         ]
         
         for obj in init_objects:
@@ -332,6 +345,12 @@ class IronManHUDRenderer:
             ts_ms,
         )
         return result.face_landmarks[0] if result.face_landmarks else None
+    
+    def _trigger_audio_alarm(self, now: float):
+        state = self._bio_state
+        if state.micro_sleep or state.looking_away or state.mar.yawning:
+            self._audio_alarm.trigger(now)
+        
 
     def render(self, frame: cv2.Mat):
         if not self._is_setup_complete():
@@ -353,5 +372,6 @@ class IronManHUDRenderer:
         self._render_title_bar(frame_canvas, fps)
         self._render_ocular_oral_telemetry(frame_canvas)
         self._render_3d_head_pose_telemetry(frame_canvas)
+        self._trigger_audio_alarm(time_now)
         return frame_canvas.canvas
         
