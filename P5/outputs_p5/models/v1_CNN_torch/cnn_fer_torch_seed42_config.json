@@ -1,0 +1,30 @@
+{
+  "framework": "pytorch",
+  "seed": 42,
+  "balance_train": false,
+  "per_class_cap": null,
+  "filters": [
+    32,
+    64,
+    128,
+    256
+  ],
+  "dropouts": [
+    0.1,
+    0.15,
+    0.2,
+    0.25
+  ],
+  "head_units": 256,
+  "head_dropout": 0.4,
+  "aug_rotation_deg": 10.8,
+  "aug_zoom": 0.1,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "epochs_run": 69,
+  "best_epoch": 57,
+  "val_loss": 1.0303635935009419,
+  "val_accuracy": 0.6368861024033438,
+  "val_f1_macro": 0.6046651074357594,
+  "train_minutes": 5.1
+}
