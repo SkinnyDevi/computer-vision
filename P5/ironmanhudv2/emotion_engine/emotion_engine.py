@@ -8,9 +8,7 @@ import torch
 
 from ironmanhudv2.emotion_engine.cnn_fer import CNNFer
 from ironmanhudv2.frame_canvas import FrameCanvas
-from ironmanhudv2.hud_panel import HUDPanel
 from ironmanhudv2.math import BBox
-from ironmanhudv2.units import Point, Size
 
 
 @dataclass

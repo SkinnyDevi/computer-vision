@@ -1,9 +1,6 @@
-from pathlib import Path
-
 import cv2
 import time
 import mediapipe as mp
-import torch
 
 from ironmanhudv2.alarm_audio import AudioAlarm
 from ironmanhudv2.biometry_engine.biometric_state import BiometricState
@@ -60,6 +57,8 @@ class IronManHUDRenderer:
         self._calibration_message: str | None = None
         self._calibration_message_color: tuple[int, int, int] = (0, 255, 0)
         self._calibration_message_until: float = 0.0
+        
+        self._render_emotions_only = False
 
     def _render_title_bar(self, frame: FrameCanvas, fps: float):
         panel_pos = Point(10, 10).scale(frame.ui_scale)
@@ -214,8 +213,10 @@ class IronManHUDRenderer:
             cooldown_seconds=bio.alarm_cooldown_seconds
         )
 
-    def setup(self, biometry_config: BiometryConfig):
+    def setup(self, biometry_config: BiometryConfig, emotions_only: bool = False):
         self.close()
+        self._render_emotions_only = emotions_only
+        
         # Setup the renderer with the provided biometry configuration
         self._biometry_config = biometry_config
         self._biometric_tracker = BiometricTracker(biometry_config)
@@ -304,17 +305,28 @@ class IronManHUDRenderer:
             self._bio_state.mar.history,
             self._current_hud_theme
         )
+    
+    def _render_emotion_telemetry(self, frame: FrameCanvas, initial_pos: Point, component_size: Size, panel_size: Size, panel_pos: Point):
+        self._emotion_telemetry_hud.render(
+            frame,
+            Point(panel_pos.x, initial_pos.y + component_size.height + (20 * frame.ui_scale)),
+            self._emotion_engine.get_confidence_for_emotions(frame, self._bio_state.bbox),
+            self._current_hud_theme,
+            size=Size(panel_size.width, 150).scale(frame.ui_scale),
+        )
         
     def _render_3d_head_pose_telemetry(self, frame: FrameCanvas, time_now: float):
         panel_size = Size(300, 200).scale(frame.ui_scale)
         panel_pos = Point(frame.width - 10 - panel_size.width, 50).scale(frame.ui_scale)
-
-        panel = HUDPanel(panel_pos, panel_size)        
-        panel.render(frame, self._current_hud_theme)
-        
         pos_offset = Point(10, 30).scale(frame.ui_scale)
         initial_pos = Point(panel_pos.x + pos_offset.x, panel_pos.y + pos_offset.y)
         component_size = Size(panel_size.width - 20, panel_size.height - 40).scale(frame.ui_scale)
+
+        if self._render_emotions_only:
+            return initial_pos, panel_pos, component_size, panel_size
+        
+        panel = HUDPanel(panel_pos, panel_size)        
+        panel.render(frame, self._current_hud_theme)
         
         cv2.putText(
             frame.canvas,
@@ -360,13 +372,7 @@ class IronManHUDRenderer:
             cv2.LINE_AA,
         )
         
-        self._emotion_telemetry_hud.render(
-            frame,
-            Point(panel_pos.x, initial_pos.y + component_size.height + (20 * frame.ui_scale)),
-            self._emotion_engine.get_confidence_for_emotions(frame, self._bio_state.bbox),
-            self._current_hud_theme,
-            size=Size(panel_size.width, 150).scale(frame.ui_scale),
-        )
+        return initial_pos, panel_pos, component_size, panel_size
         
         
     def _calculate_landmarks(self, frame: cv2.Mat, ts_ms: int):
@@ -423,12 +429,35 @@ class IronManHUDRenderer:
         
         face_landmarks = self._calculate_landmarks(frame_canvas.canvas, self._last_ts_ms)
         self._bio_state = self._biometric_tracker.update(face_landmarks, frame_canvas.size, time_now)
-        self._current_hud_theme = resolve_hud_theme(self._bio_state, time_now)
         
-        self._facial_mesh.render(frame_canvas, self._current_hud_theme, self._bio_state, time_now)
-        self._render_title_bar(frame_canvas, fps)
-        self._render_ocular_oral_telemetry(frame_canvas)
-        self._render_3d_head_pose_telemetry(frame_canvas, time_now)
-        self._trigger_audio_alarm(time_now)
+        if not self._render_emotions_only:
+            self._current_hud_theme = resolve_hud_theme(self._bio_state, time_now)
+            self._facial_mesh.render(frame_canvas, self._current_hud_theme, self._bio_state, time_now)
+            self._render_title_bar(frame_canvas, fps)
+            self._render_ocular_oral_telemetry(frame_canvas)
+            initial_pos, panel_pos, component_size, panel_size = self._render_3d_head_pose_telemetry(frame_canvas, time_now)
+            self._trigger_audio_alarm(time_now)
+        
+        if self._render_emotions_only:
+            # Render box around the face if detected
+            if self._bio_state.face_detected and self._bio_state.bbox is not None:
+                p1x = self._bio_state.bbox.x1
+                p1y = self._bio_state.bbox.y1
+                p2x = self._bio_state.bbox.x2
+                p2y = self._bio_state.bbox.y2
+                
+                cv2.rectangle(
+                    frame_canvas.canvas,
+                    (p1x, p1y),
+                    (p2x, p2y),
+                    (0, 255, 0),
+                    2,
+                    cv2.LINE_AA
+                )
+                
+            initial_pos, panel_pos, component_size, panel_size = self._render_3d_head_pose_telemetry(frame_canvas, time_now)
+        
+        self._render_emotion_telemetry(frame_canvas, initial_pos, component_size, panel_size, panel_pos)
+        
         return frame_canvas.canvas
         
