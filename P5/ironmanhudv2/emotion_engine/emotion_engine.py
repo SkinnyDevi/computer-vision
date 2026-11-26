@@ -25,6 +25,9 @@ class EmotionEngine:
         if device is not None:
             return torch.device(device)
         
+        if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+            return torch.device("mps")
+        
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     def __init__(
