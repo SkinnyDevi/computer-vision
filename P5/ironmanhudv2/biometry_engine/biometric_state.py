@@ -79,6 +79,7 @@ class BiometricState:
     yaw: Yaw3D = field(default_factory=Yaw3D)
     roll: Roll3D = field(default_factory=Roll3D)
     
+    micro_sleep: bool = False
     rvec: np.ndarray | None = None # Rotation vector for head pose estimation
     tvec: np.ndarray | None = None # Translation vector for head pose estimation
     dist_coeffs: np.ndarray | None = None # Distortion coefficients for camera calibration

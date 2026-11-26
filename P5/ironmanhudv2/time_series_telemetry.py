@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 
 from ironmanhudv2.frame_canvas import FrameCanvas
+from ironmanhudv2.hud_theme import ColorScalar, HUDTheme
 from ironmanhudv2.rectangle import get_rectangle_draw_points
 from ironmanhudv2.units import Point, Size
 
@@ -65,7 +66,7 @@ class TimeSeriesGraph:
                 1
             )
         
-    def _calculate_time_points(self, frame: FrameCanvas, position: Point, size: Size, values: list[float]) -> list[Point]:
+    def _calculate_time_points(self, position: Point, size: Size, values: list[float]) -> list[Point]:
         time_points = []
         drawable_width = max(size.width - 4, 1)
         drawable_height = max(size.height - 4, 1)
@@ -81,28 +82,38 @@ class TimeSeriesGraph:
 
         return time_points
             
-    def _plot_points_over_time(self, frame: FrameCanvas, position: Point, size: Size, values: list[float]):
+    def _plot_points_over_time(self, 
+                               frame: FrameCanvas,
+                               position: Point,
+                               size: Size,
+                               values: list[float],
+                               point_color: ColorScalar = (0, 255, 0)
+    ):
         if len(self.values) < 2:
             return
         
-        points = self._calculate_time_points(frame, position, size, values)
+        points = self._calculate_time_points(position, size, values)
         pts = np.array([p.to_tuple() for p in points], dtype=np.int32)
         cv2.polylines(
             frame.canvas,
             [pts],
             False,
-            (0, 255, 0),  # Line color (green in this case)
+            point_color,
             1,
             cv2.LINE_AA
         )
         
         
-    def render(self, frame: FrameCanvas, position: Point, size: Size, values: list[float]):
-        # Render the time series graph on the HUD
-        # This could involve drawing lines or bars representing the values over time
+    def render(self, 
+               frame: FrameCanvas,
+               position: Point,
+               size: Size, 
+               values: list[float],
+               theme: HUDTheme
+    ):
         self.values = values
         graph_bg_position, graph_bg_size = self._draw_graph_bg(frame, position, size)
-        self._plot_points_over_time(frame, position, size, self.values)
+        self._plot_points_over_time(frame, position, size, self.values, theme.time_series_point)
         self._draw_threshold_dotted_line(frame, graph_bg_position, graph_bg_size)
         
         
@@ -132,7 +143,12 @@ class ThresholdProgressBar:
         clipped_value = np.clip(value / max(self.max_value, 1e-6), 0.0, 1.0)
         return int(size.width * float(clipped_value))
         
-    def _draw_inner_value_bar(self, frame: FrameCanvas, position: Point, size: Size):
+    def _draw_inner_value_bar(self, 
+                              frame: FrameCanvas,
+                              position: Point, 
+                              size: Size,
+                              bar_color: ColorScalar = (0, 255, 0)
+    ):
         bar_width = self._get_bar_width(self.value, size)
         if bar_width <= 0:
             return
@@ -142,7 +158,7 @@ class ThresholdProgressBar:
             frame.canvas,
             pt1,
             pt2,
-            (0, 255, 0),  # Color of the inner value bar (green in this case)
+            bar_color,
             -1
         )
         
@@ -152,11 +168,16 @@ class ThresholdProgressBar:
             frame.canvas,
             pt1,
             pt2,
-            (95, 115, 130),  # Color of the border
+            (95, 115, 130),
             1
         )
     
-    def _draw_threshold_line(self, frame: FrameCanvas, position: Point, size: Size):
+    def _draw_threshold_line(self, 
+                             frame: FrameCanvas, 
+                             position: Point, 
+                             size: Size,
+                             line_color: ColorScalar=(255,255,255)
+    ):
         if self.threshold is None:
             return
         
@@ -165,15 +186,21 @@ class ThresholdProgressBar:
             frame.canvas,
             (int(threshold_x), int(position.y)),
             (int(threshold_x), int(position.y + size.height)),
-            (255, 0, 0),  # Color of the threshold line (red in this case)
+            line_color,
             2,
             cv2.LINE_AA
         )
 
-    def render(self, frame: FrameCanvas, position: Point, size: Size, new_value: float):
+    def render(self, 
+               frame: FrameCanvas, 
+               position: Point, 
+               size: Size, 
+               new_value: float,
+               theme: HUDTheme
+    ):
         self.value = new_value
         self._draw_bar_bg(frame, position, size)
-        self._draw_inner_value_bar(frame, position, size)
+        self._draw_inner_value_bar(frame, position, size, theme.progress_bar)
         self._draw_border(frame, position, size)
         self._draw_threshold_line(frame, position, size)
         
@@ -212,7 +239,8 @@ class TimeSeriesTelemetryHUD:
         frame: FrameCanvas,
         position: Point,
         size: Size,
-        progress_bar_value: float
+        progress_bar_value: float,
+        theme: HUDTheme
     ):
         cv2.putText(
             frame.canvas,
@@ -228,14 +256,15 @@ class TimeSeriesTelemetryHUD:
         # Render the progress bar next to the label
         progress_bar_size = Size(150, 15)
         progress_bar_position = Point(position.x + size.width - progress_bar_size.width - 20, position.y - (progress_bar_size.height // 1.2))  # Adjust position as needed
-        self.progress_bar.render(frame, progress_bar_position, progress_bar_size, progress_bar_value)
+        self.progress_bar.render(frame, progress_bar_position, progress_bar_size, progress_bar_value, theme)
     
     def render(self, 
                frame: FrameCanvas, 
                position: Point, 
                size: Size,
                progress_bar_value: float,
-               time_series_values: list[float]
+               time_series_values: list[float],
+               theme: HUDTheme
         ):
         initial_pos = position * 1 # create a copy
         
@@ -243,11 +272,11 @@ class TimeSeriesTelemetryHUD:
         self._render_title(frame, initial_pos)
         initial_pos.y += 30 * frame.ui_scale
         
-        self._render_label_with_progress_bar(frame, initial_pos, size, progress_bar_value)
+        self._render_label_with_progress_bar(frame, initial_pos, size, progress_bar_value, theme)
         initial_pos.y += 20 * frame.ui_scale
         
         graph_size = Size(size.width - 20, 80)
-        self.time_series_graph.render(frame, initial_pos, graph_size, time_series_values)
+        self.time_series_graph.render(frame, initial_pos, graph_size, time_series_values, theme)
         initial_pos.y += graph_size.height + 20 * frame.ui_scale
         
         for render_func in self.additional_graphs_render:
