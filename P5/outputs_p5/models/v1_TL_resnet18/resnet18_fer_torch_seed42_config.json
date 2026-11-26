@@ -11,5 +11,5 @@
   "val_f1_no_tta": 0.6640941480579946,
   "val_acc_tta": 0.6877394636015326,
   "val_f1_tta": 0.6692772634281371,
-  "train_minutes": 5.9
+  "train_minutes": 6.0
 }
