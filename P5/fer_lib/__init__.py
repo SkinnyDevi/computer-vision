@@ -1,0 +1,28 @@
+"""Librería modular para reconocimiento de emociones faciales (FER-2013) en P5."""
+
+from .config import (
+    P5_DIR,
+    DATA_DIR,
+    TRAIN_DIR,
+    TEST_DIR,
+    OUT_DIR,
+    MODELS_DIR,
+    OTHERS_DIR,
+    CNN_DIR,
+    TL_RESNET18_DIR,
+    TL_EFFNET_DIR,
+    ENSEMBLE_DIR,
+    CNN_CKPT,
+    RESNET18_CKPT,
+    EFFNET_CKPT,
+    ENSEMBLE_CKPT,
+    SEED,
+    IMG_SIZE,
+    TL_IMG_SIZE,
+    VAL_SIZE,
+    DEEPFACE_N,
+    IMG_EXT,
+    configure_runtime_env,
+    save_json,
+    load_json,
+)
