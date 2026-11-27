@@ -72,7 +72,7 @@ class IronManHUDRenderer:
         panel_text_pos = panel_pos + text_offset
         cv2.putText(
             frame.canvas,
-            "IRONMAN HUD V2",
+            "J.A.R.V.I.S.",
             panel_text_pos.to_int_tuple(),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6 * frame.ui_scale,
