@@ -8,21 +8,47 @@
 - **Cuaderno principal:** [`VC_IronMan.ipynb`](./VC_IronMan.ipynb)
 
 ---
+## Requisitos y dependencias
+
+### Entorno Python
+
+Las dependencias del entorno se recogen en [`requirements.txt`](./requirements.txt):
+
+```bash
+pip install -r requirements.txt
+```
+
+Las bibliotecas principales empleadas por el filtro son:
+
+- `opencv-python` / `opencv-contrib-python`
+- `mediapipe`
+- `numpy`
+- `torch` _(para la carga del módulo de telemetría emocional integrado en el HUD)_
+
+Las bibliotecas principales para la comparativa:
+- `torch` y `torchvision` (el entrenamiento se hizo con GPU CUDA: NVIDIA RTX 3060 Ti).
+- `deepface`
+---
+
 ## Tarea I - Entrenamiento de un modelo de emociones faciales con PyTorch
 
 En esta tarea crearemos un modelo y haremos una serie de comparatifca para poder clasificar las emociones desde el dataset [FER-2013](https://www.kaggle.com/datasets/ananthu017/emotion-detection-fer). En este dataset contiene imágenes de caras **48x48 píxeles en escala de grises**, usando modelos clásicos de vision por computador hasta redes convulucionales, trasfer learning y ensables.
 
 **Clases (7):** `angry`, `disgusted`, `fearful`, `happy`, `neutral`, `sad`, `surprised`.
 
+## Demostración
+
+https://github.com/user-attachments/assets/21926703-1866-480b-aebb-c3654b42dc8a
+
 ## Requisitos
+
 - Python 3.11 (entorno conda `VC_P5`).
 - `numpy`, `pandas`, `matplotlib`, `opencv-python`, `scikit-learn`, `joblib`, `tqdm`.
-- `torch` y `torchvision` (el entrenamiento se hizo con GPU CUDA: NVIDIA RTX 3060 Ti).
-- `deepface` 
+
 
 ## Procedimiento general
 
-Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada uno guarda artefactos que se utilizan para la comparativa, transfer learning y el ensamble. A continuación le ponder una tabla que resume que guarda y que hace.
+Los notebooks forman un **pipeline** y **debe ejecutarse en orden**, porque cada uno guarda artefactos que se utilizan para la comparativa, transfer learning y el ensamble. A continuación le ponder una tabla que resume que guarda y que hace.
 
 | Paso | Notebook                  | Qué hace                                                | Qué guarda                     |
 | ---- | ------------------------- | ------------------------------------------------------- | ------------------------------ |
@@ -74,6 +100,7 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 ![Matrices de confusión de ResNet-18 y EfficientNet-B0 en validación](img/03_matrices_resnet18_efficientnet_val.png)
 
 ### 04 - Ensamble
+
 - Media simple (0,5 / 0,5) de las probabilidades de la CNN propia y de ResNet-18, ambas con TTA.
 - Validación: **70,41 % accuracy / 68,71 % F1-macro**, unos +1,5 puntos de F1-macro sobre el mejor modelo individual.
 
@@ -115,6 +142,7 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 | HOG + SVM                  | 0,496    | 0,432    | 4,87      |
 | Stacked                    | 0,465    | 0,420    | 3,72      |
 
+
 ## Gráficos de la comparativa
 
 ![Comparativa final: rendimiento y tiempo de inferencia](img/05_comparativa_final.png)
@@ -134,23 +162,159 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 | DeepFace (muestra común)                        |
 | ----------------------------------------------- |
 | ![DeepFace](img/05_matriz_deepface_muestra.png) |
+### Rendimiento por emoción
+ 
+Para cada emoción se muestran precisión, recall y F1 en el **test completo** (7.178 imágenes) y en la **muestra común** (1.000 imágenes). En negrita, el mejor valor de cada columna. DeepFace solo se evaluó en la muestra, y de los clásicos el informe por clase solo se imprime para HOG+SVM en el test completo. «—» indica que ese modelo no se evaluó en ese conjunto o que su informe por clase no se generó.
+ 
+#### `angry` (test: 958 imágenes · muestra: 133)
+ 
+| Modelo | Precisión (test) | Recall (test) | F1 (test) | Precisión (muestra) | Recall (muestra) | F1 (muestra) |
+|---|---|---|---|---|---|---|
+| HOG+SVM | 0,386 | 0,381 | 0,383 | — | — | — |
+| CNN propia | 0,631 | 0,637 | 0,634 | **0,639** | 0,639 | 0,639 |
+| ResNet-18 | 0,589 | 0,633 | 0,610 | 0,545 | 0,632 | 0,585 |
+| Ensamble | **0,635** | **0,652** | **0,643** | 0,631 | **0,669** | **0,650** |
+| DeepFace | — | — | — | 0,500 | 0,376 | 0,429 |
+ 
+El ensamble es el mejor en ambos escenarios, seguido de la CNN. HOG+SVM y DeepFace quedan muy por debajo; DeepFace tiene un recall de solo 0,376: se deja sin detectar casi dos de cada tres.
+ 
+#### `disgusted` (test: 111 imágenes · muestra: 15)
+ 
+| Modelo | Precisión (test) | Recall (test) | F1 (test) | Precisión (muestra) | Recall (muestra) | F1 (muestra) |
+|---|---|---|---|---|---|---|
+| HOG+SVM | **0,711** | 0,288 | 0,410 | — | — | — |
+| CNN propia | 0,627 | **0,712** | 0,667 | **0,667** | **0,667** | **0,667** |
+| ResNet-18 | 0,581 | 0,676 | 0,625 | **0,667** | 0,533 | 0,593 |
+| Ensamble | 0,632 | **0,712** | **0,669** | 0,625 | **0,667** | 0,645 |
+| DeepFace | — | — | — | 0,571 | 0,533 | 0,552 |
+ 
+Ensamble y CNN prácticamente empatan en test. HOG+SVM tiene la mayor precisión (0,711) pero un recall de 0,288: acierta cuando predice `disgusted`, pero se deja la mayoría sin detectar. En la muestra solo hay 15 imágenes, así que esas cifras son poco fiables.
+ 
+#### `fearful` (test: 1024 imágenes · muestra: 143)
+ 
+| Modelo | Precisión (test) | Recall (test) | F1 (test) | Precisión (muestra) | Recall (muestra) | F1 (muestra) |
+|---|---|---|---|---|---|---|
+| HOG+SVM | 0,391 | 0,332 | 0,359 | — | — | — |
+| CNN propia | 0,550 | 0,486 | 0,516 | **0,634** | 0,497 | 0,557 |
+| ResNet-18 | 0,561 | 0,497 | 0,527 | 0,612 | 0,517 | 0,561 |
+| Ensamble | **0,589** | **0,509** | **0,546** | 0,623 | **0,531** | **0,574** |
+| DeepFace | — | — | — | 0,444 | 0,441 | 0,442 |
+ 
+Es una de las más difíciles para todos: el recall de los modelos profundos ronda el 0,5, es decir, se pierde aproximadamente la mitad de los casos. El ensamble mejora más aquí que en otras clases (+1,9 puntos sobre ResNet-18, el mejor individual).
+ 
+#### `happy` (test: 1774 imágenes · muestra: 247)
+ 
+| Modelo | Precisión (test) | Recall (test) | F1 (test) | Precisión (muestra) | Recall (muestra) | F1 (muestra) |
+|---|---|---|---|---|---|---|
+| HOG+SVM | 0,642 | 0,762 | 0,697 | — | — | — |
+| CNN propia | **0,871** | 0,888 | 0,879 | **0,898** | 0,858 | 0,878 |
+| ResNet-18 | 0,848 | **0,911** | 0,878 | 0,855 | **0,883** | 0,869 |
+| Ensamble | 0,864 | 0,905 | **0,884** | 0,889 | 0,879 | **0,884** |
+| DeepFace | — | — | — | 0,777 | 0,761 | 0,769 |
+ 
+La mejor reconocida por todos los modelos: los tres profundos están en torno a 0,88 de F1 y la diferencia entre ellos es mínima. Incluso DeepFace alcanza 0,77.
+ 
+#### `neutral` (test: 1233 imágenes · muestra: 172)
+ 
+| Modelo | Precisión (test) | Recall (test) | F1 (test) | Precisión (muestra) | Recall (muestra) | F1 (muestra) |
+|---|---|---|---|---|---|---|
+| HOG+SVM | 0,466 | 0,476 | 0,471 | — | — | — |
+| CNN propia | 0,625 | **0,715** | 0,667 | 0,604 | **0,727** | **0,660** |
+| ResNet-18 | 0,627 | 0,662 | 0,644 | 0,588 | 0,640 | 0,613 |
+| Ensamble | **0,642** | 0,713 | **0,676** | **0,611** | 0,703 | 0,654 |
+| DeepFace | — | — | — | 0,432 | 0,552 | 0,485 |
+ 
+El ensamble gana en test y la CNN en la muestra, con diferencias pequeñas. En la CNN y el ensamble el recall (≈ 0,71) es mayor que la precisión (≈ 0,63): tienden a predecir `neutral` más de la cuenta. DeepFace muestra el mismo sesgo con más intensidad (recall 0,552 frente a precisión 0,432).
+ 
+#### `sad` (test: 1247 imágenes · muestra: 174)
+ 
+| Modelo | Precisión (test) | Recall (test) | F1 (test) | Precisión (muestra) | Recall (muestra) | F1 (muestra) |
+|---|---|---|---|---|---|---|
+| HOG+SVM | 0,400 | 0,398 | 0,399 | — | — | — |
+| CNN propia | 0,611 | 0,518 | 0,561 | **0,635** | **0,580** | **0,607** |
+| ResNet-18 | 0,588 | 0,508 | 0,545 | 0,580 | 0,500 | 0,537 |
+| Ensamble | **0,620** | **0,544** | **0,579** | 0,625 | 0,546 | 0,583 |
+| DeepFace | — | — | — | 0,437 | 0,437 | 0,437 |
+ 
+Junto con `fearful`, la más difícil de los modelos profundos: el recall queda en 0,51–0,54. El ensamble es el mejor en test y la CNN en la muestra.
+ 
+#### `surprised` (test: 831 imágenes · muestra: 116)
+ 
+| Modelo | Precisión (test) | Recall (test) | F1 (test) | Precisión (muestra) | Recall (muestra) | F1 (muestra) |
+|---|---|---|---|---|---|---|
+| HOG+SVM | 0,690 | 0,591 | 0,636 | — | — | — |
+| CNN propia | 0,766 | **0,834** | 0,798 | 0,746 | **0,888** | **0,811** |
+| ResNet-18 | **0,796** | 0,794 | 0,795 | 0,769 | 0,802 | 0,785 |
+| Ensamble | 0,795 | 0,824 | **0,809** | **0,772** | 0,845 | 0,807 |
+| DeepFace | — | — | — | 0,731 | 0,681 | 0,705 |
+ 
+La segunda mejor reconocida. Los tres modelos profundos están a menos de 1,5 puntos entre sí; el ensamble gana en test y la CNN en la muestra.
+ 
+#### Resumen: mejor modelo por emoción
+ 
+| Emoción | Mejor en test completo (F1) | Mejor en muestra común (F1) |
+|---|---|---|
+| `angry` | Ensamble (0,643) | Ensamble (0,650) |
+| `disgusted` | Ensamble (0,669) | CNN propia (0,667) |
+| `fearful` | Ensamble (0,546) | Ensamble (0,574) |
+| `happy` | Ensamble (0,884) | Ensamble (0,884) |
+| `neutral` | Ensamble (0,676) | CNN propia (0,660) |
+| `sad` | Ensamble (0,579) | CNN propia (0,607) |
+| `surprised` | Ensamble (0,809) | CNN propia (0,811) |
+ 
+- **El ensamble es el mejor en las 7 emociones en test completo**, pero la ventaja sobre el mejor modelo individual es pequeña: entre 0,2 y 1,9 puntos de F1.
+- En la muestra común la CNN propia gana en `disgusted`, `neutral`, `sad` y `surprised`. Con solo 1.000 imágenes (y 15 de `disgusted`) esas diferencias no son concluyentes.
+- El orden de dificultad es parecido en todos los modelos: `happy` y `surprised` se reconocen mejor; `fearful`, `sad` y `angry` peor.
+- Los modelos profundos superan a HOG+SVM en las 7 emociones, con una diferencia de entre 17 y 26 puntos de F1 (la menor en `surprised`, la mayor en `angry`).
+---
+##  ¿Por qué se usa TTA?
+ 
+**TTA** (*Test-Time Augmentation*) consiste en hacer la predicción sobre varias versiones de la misma imagen y promediar los resultados. Aquí se usa la versión más simple: la imagen original y su **reflejo horizontal**, y se promedian las probabilidades de ambas.
+ 
+```
+p_final = ½ · p(imagen) + ½ · p(imagen volteada)
+```
+ 
+### Motivos
+ 
+1. **Una cara volteada sigue expresando la misma emoción.** El volteo horizontal no cambia la etiqueta, y es una transformación segura, a diferencia de otras que podrían alterar la expresión.
+2. **Es coherente con el entrenamiento.** Tanto la CNN propia como los modelos de transfer learning se entrenan con volteo horizontal aleatorio (p = 0,5) como parte del aumento de datos. En test, el modelo ya ha visto caras en ambas orientaciones, así que el reflejo no le resulta una entrada extraña.
+3. **Reduce la varianza de la predicción.** Promediar dos "vistas" de la misma cara suaviza errores puntuales. Es el mismo principio que el del ensamble (notebook 04), pero con un único modelo.
 
+### Qué mejora (medido en validación, notebook 03)
+ 
+| Modelo | Accuracy sin TTA | Accuracy con TTA | F1-macro sin TTA | F1-macro con TTA |
+|---|---|---|---|---|
+| ResNet-18 | 68,18 % | 68,77 % | 66,41 % | 66,93 % |
+| EfficientNet-B0 | 67,97 % | 68,29 % | 66,01 % | 66,24 % |
+ 
+La mejora es **pequeña pero consistente**: entre +0,3 y +0,6 puntos de accuracy y entre +0,2 y +0,5 de F1-macro en ambos modelos.
+ 
+### Qué cuesta
+ 
+- La inferencia necesita **dos pasadas** por la red en lugar de una, por lo que el tiempo por imagen se multiplica aproximadamente por dos. Por eso los ms/imagen de las tablas de este README son con TTA.
+- En una aplicación con restricciones de tiempo real, sería razonable desactivarlo y asumir la pérdida de medio punto.
+### Cómo aplicarlo en la comparativa
+ 
+- Se aplica a **todos los modelos profundos** (CNN, ResNet-18, EfficientNet-B0 y el ensamble) en validación y test, para que se comparen en igualdad de condiciones entre ellos.
+- **No se aplica** a los modelos clásicos ni a DeepFace, que se usan tal cual. Conviene tenerlo en cuenta al leer la comparativa: parte de la ventaja de los modelos profundos (en torno a medio punto) viene del TTA, aunque es muy pequeña frente a la diferencia de casi 20 puntos con los clásicos.
+- Solo el notebook 03 mide el efecto con y sin TTA; en los notebooks 02, 04 y 05 los resultados se dan directamente con TTA.
+
+---
 ## Conclusión
+
+
+**Reconocimiento en tiempo real: ensamble frente a CNN propia.** En la muestra común, la CNN y el ensamble rinden prácticamente igual (70,7 % frente a 70,6 % de accuracy), pero el ensamble necesita unos 4,8 ms por imagen frente a 1,6 ms de la CNN, casi el triple, porque ejecuta además ResNet-18 y aplica TTA en ambos modelos. 
+
+Con la misma precisión y mucho más coste, la CNN es la opción más adecuada para tiempo real. Además, al probarlo en el filtro en vivo, el ensamble representó peor las emociones que la CNN sola. Una posible explicación es que ResNet-18, que de forma individual es menos precisa que la CNN (67,4 % frente a 70,7 % en la muestra), arrastra hacia abajo al ensamble cuando la entrada se aleja de FER-2013. La cámara da imágenes en color, con otra resolución, iluminación y encuadre, mientras que el dataset son caras de 48×48 en gris.
+
+### Datos a tener en cuenta
 - Los modelos profundos superan a los clásicos por casi **20 puntos** de accuracy. DeepFace, sin reentrenar, queda en medio.
 - En los clásicos importa más **el descriptor que el clasificador**: HOG funciona claramente mejor que PCA y LBP.
-- **Transfer learning no mejora a la CNN propia** en este problema: con una receta de entrenamiento equivalente, los resultados son casi iguales. Una posible explicación (hipótesis, no comprobada en los notebooks) es que las imágenes de 48×48 en gris se parecen poco a las de ImageNet.
-- El **ensamble** de dos modelos de naturaleza distinta aporta la mejora más estable en test completo, a cambio de un coste de inferencia mayor.
 - Las clases más difíciles son `sad`, `fearful` y `angry`, que se confunden entre sí y con `neutral`. `happy` y `surprised` se reconocen mejor.
-- En la muestra de 1.000 imágenes la diferencia entre CNN y ensamble (0,1 puntos) no es concluyente; `disgusted` solo tiene 15 imágenes en esa muestra.
+- En la muestra de 1.000 imágenes la diferencia entre CNN y ensamble (0,1 puntos) no es concluyente; `disgusted` solo tiene 15 imágenes en esa muestra confirmando que esta emoción es complicada de espresar y de demostrar en los modelos en el vídeo.
 
-## Notas y limitaciones
-
-- **Tiempos de inferencia:** no son comparables entre test completo y muestra. En test completo, los modelos profundos van por lotes de 256; en la muestra, de imagen en imagen. Para comparar velocidades, usar la tabla de la muestra.
-- **Checkpoint del ensamble:** en la ejecución del notebook 04, la verificación de recarga del `.pt` del ensamble devolvió `False` (en 02 y 03 devolvió `True`). Las métricas de 04 y 05 no dependen de ese fichero, porque el ensamble se recalcula promediando las probabilidades, pero conviene revisar su cargador antes de usarlo de forma independiente.
-- **EfficientNet-B0** se entrena y se guarda en el notebook 03, pero no se incluye en la comparativa final.
-- Las advertencias `FutureWarning` de `SVC(probability=True)` son esperadas con la versión de scikit-learn usada y no afectan a los resultados.
-- Las rutas absolutas (`/home/cris/...`) que aparecen en las salidas guardadas son del equipo donde se ejecutó. La raíz del proyecto se detecta automáticamente buscando la carpeta `fer_lib/`.
-
+---
 ## Tarea II - Filtro de temática libre: J.A.R.V.I.S. / Iron-Man HUD con detección de somnolencia y distracción
 
 En este proyecto se ha desarrollado un demostrador interactivo en tiempo real inspirado en el visor holográfico J.A.R.V.I.S. (Iron-Man), proyectado directamente sobre el rostro capturado por la webcam.
@@ -160,7 +324,7 @@ El sistema parte de la detección de **landmarks faciales con MediaPipe (`FaceLa
 1. **Telemetría ocular (EAR):** cálculo de la relación de aspecto del ojo, conteo de parpadeos, frecuencia de parpadeo por minuto (BPM) y detección de microsueño por cierre prolongado.
 2. **Telemetría oral y de fatiga (MAR):** cálculo de la relación de aspecto de la boca y detección de bostezos sostenidos.
 3. **Estimación de pose 3D (`cv2.solvePnP`):** proyección 2D–3D para estimar Pitch, Yaw y Roll, radar posicional en tiempo real, calibración de postura neutra y detección de cabeceo o distracción.
-4. **Malla facial táctica y retícula ocular animada:** superposición de media malla facial en *wireframe* y una retícula segmentada giratoria centrada en el iris derecho cuya velocidad reacciona al estado de alerta.
+4. **Malla facial táctica y retícula ocular animada:** superposición de media malla facial en _wireframe_ y una retícula segmentada giratoria centrada en el iris derecho cuya velocidad reacciona al estado de alerta.
 5. **Sistema reactivo de tema visual y alarma sonora:** cambio automático de la paleta del HUD (cian nominal, ámbar de advertencia y rojo crítico) acompañado de una alarma acústica asíncrona cuando se detecta fatiga o distracción.
 6. **Panel integrado de telemetría emocional:** componente modular listo para consumir un modelo entrenado de emociones sobre la región facial detectada.
 
@@ -168,28 +332,9 @@ El sistema parte de la detección de **landmarks faciales con MediaPipe (`FaceLa
 
 ## Demostración
 
-https://github.com/user-attachments/assets/21926703-1866-480b-aebb-c3654b42dc8a
-
 https://github.com/user-attachments/assets/1c036da3-bf4d-479b-82bc-d51186c8b14e
 
 ---
-
-## Requisitos y dependencias
-
-### Entorno Python
-
-Las dependencias del entorno se recogen en [`requirements.txt`](./requirements.txt):
-
-```bash
-pip install -r requirements.txt
-```
-
-Las bibliotecas principales empleadas por el filtro son:
-
-- `opencv-python` / `opencv-contrib-python`
-- `mediapipe`
-- `numpy`
-- `torch` *(para la carga del módulo de telemetría emocional integrado en el HUD)*
 
 ### Recursos adicionales
 
@@ -202,6 +347,7 @@ Las bibliotecas principales empleadas por el filtro son:
 ## Arquitectura del proyecto
 
 El proyecto que reside en [`ironmanhudv2/`](./ironmanhudv2/) está organizado en módulos y clases que encapsulan la funcionalidad del HUD:
+
 - `FrameCanvas`: maneja la visualización y manipulación del lienzo de la imagen.
 - `IronManHUDRenderer`: se encarga de renderizar el HUD en la imagen.
 - `FaceLandmarker`: detecta y procesa los puntos de referencia faciales.
@@ -261,7 +407,7 @@ Todos estos parametros son configurables en el cuaderno principal [`VC_IronMan.i
 Sobre el rostro detectado se dibujan dos elementos holográficos inspirados en el visor de Iron-Man:
 
 - **Retícula ocular animada:** situada sobre el iris derecho (`RIGHT_IRIS_IDX = 468`), compuesta por cinco anillos/arcos concéntricos que giran en sentidos opuestos (`95°/s` en estado normal y multiplicado por `2.5` ante `micro_sleep` o `looking_away`). Su radio se adapta automáticamente a la distancia a la cámara combinando altura facial, distancia interocular y anchura del ojo.
-- **Malla facial de media cara:** *wireframe* sobre el hemisferio izquierdo del rostro (`37` nodos y conexiones predefinidas en `LEFT_HALF_FACE_MESH_IDXS` y `LEFT_HALF_FACE_MESH_CONNECTIONS`), manteniendo abiertas las regiones internas del ojo y la boca para no tapar la mirada ni entorpecer la lectura del HUD.
+- **Malla facial de media cara:** _wireframe_ sobre el hemisferio izquierdo del rostro (`37` nodos y conexiones predefinidas en `LEFT_HALF_FACE_MESH_IDXS` y `LEFT_HALF_FACE_MESH_CONNECTIONS`), manteniendo abiertas las regiones internas del ojo y la boca para no tapar la mirada ni entorpecer la lectura del HUD.
 
 ### 6. Sistema reactivo de colores y alarma acústica
 
@@ -271,7 +417,7 @@ Sobre el rostro detectado se dibujan dos elementos holográficos inspirados en e
 - **Advertencia (`WARNING_HUD_THEME`):** tonos ámbar/naranja cuando se detecta distracción (`looking_away`) o bostezo (`yawning`).
 - **Crítico (`CRITICAL_HUD_THEME`):** tonos rojo carmesí cuando se detecta `micro_sleep`.
 
-De forma paralela, `_trigger_audio_alarm()` dispara `AudioAlarm.trigger()` con [`jarvis_alarm.wav`](./jarvis_alarm.wav) y un *cooldown* de `1.8 s` siempre que esté activa alguna de las condiciones de `micro_sleep`, `looking_away` o `yawning`.
+De forma paralela, `_trigger_audio_alarm()` dispara `AudioAlarm.trigger()` con [`jarvis_alarm.wav`](./jarvis_alarm.wav) y un _cooldown_ de `1.8 s` siempre que esté activa alguna de las condiciones de `micro_sleep`, `looking_away` o `yawning`.
 
 ---
 
@@ -284,10 +430,10 @@ De forma paralela, `_trigger_audio_alarm()` dispara `AudioAlarm.trigger()` con [
 
 ### Controles en vivo
 
-| Tecla | Acción |
-| :--- | :--- |
-| `c` / `C` | Calibrar la pose neutra actual de la cabeza como referencia `0°` en Pitch, Yaw y Roll |
-| `q` / `Q` / `ESC` | Detener la captura, liberar la cámara y cerrar la ventana del HUD |
+| Tecla             | Acción                                                                                |
+| :---------------- | :------------------------------------------------------------------------------------ |
+| `c` / `C`         | Calibrar la pose neutra actual de la cabeza como referencia `0°` en Pitch, Yaw y Roll |
+| `q` / `Q` / `ESC` | Detener la captura, liberar la cámara y cerrar la ventana del HUD                     |
 
 ---
 
@@ -303,5 +449,5 @@ De forma paralela, `_trigger_audio_alarm()` dispara `AudioAlarm.trigger()` con [
 
 - [MediaPipe Face Landmarker — Google AI Edge](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker)
 - [OpenCV `solvePnP` y estimación de pose](https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html)
-- Soukupová, T., & Čech, J. (2016). *Real-Time Eye Blink Detection using Facial Landmarks*. 21st Computer Vision Winter Workshop.
+- Soukupová, T., & Čech, J. (2016). _Real-Time Eye Blink Detection using Facial Landmarks_. 21st Computer Vision Winter Workshop.
 - [FER-2013 dataset de las emociones](https://www.kaggle.com/datasets/ananthu017/emotion-detection-fer)
