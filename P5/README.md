@@ -168,7 +168,9 @@ El sistema parte de la detección de **landmarks faciales con MediaPipe (`FaceLa
 
 ## Demostración
 
-![Demostración del filtro J.A.R.V.I.S. / Iron-Man HUD](./images/jarvis_hud_demo.gif)
+https://github.com/user-attachments/assets/21926703-1866-480b-aebb-c3654b42dc8a
+
+https://github.com/user-attachments/assets/1c036da3-bf4d-479b-82bc-d51186c8b14e
 
 ---
 
