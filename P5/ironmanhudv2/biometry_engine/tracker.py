@@ -128,10 +128,7 @@ class BiometricTracker:
         )
 
     def rotation_matrix_to_euler(self, rmat: np.ndarray) -> tuple[float, float, float]:
-        '''Convierte matriz de rotación a (pitch, yaw, roll) en grados desde el eje frontal nasal.'''
         
-        # TODO: Consider using cv2.decomposeProjectionMatrix for a more robust solution
-        # TODO: Find simpler way to convert rotation matrix to Euler angles without using Rodrigues
         nose_fwd = rmat @ np.array([0.0, 0.0, -1.0], dtype=np.float64)
         pitch = float(np.degrees(np.arcsin(np.clip(-nose_fwd[1], -1.0, 1.0))))
         yaw = float(np.degrees(np.arctan2(nose_fwd[0], -nose_fwd[2])))
@@ -141,7 +138,6 @@ class BiometricTracker:
     def solve_head_pose_pnp(
         self, pts_2d: np.ndarray, size: Size
     ) -> tuple[float, float, float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        '''Estima rotación/traslación 3D de la cabeza mediante cv2.solvePnP.'''
         
         image_points = pts_2d[PNP_LANDMARK_IDXS].astype(np.float64)
         cam_matrix = self.build_camera_matrix(size)
