@@ -8,6 +8,7 @@
 - **Cuaderno principal:** [`VC_IronMan.ipynb`](./VC_IronMan.ipynb)
 
 ---
+
 ## Requisitos y dependencias
 
 ### Entorno Python
@@ -30,7 +31,7 @@ Las bibliotecas principales para la comparativa:
 - `deepface`
 ---
 
-## Tarea I - Entrenamiento de un modelo de emociones faciales con PyTorch
+# Tarea I - Entrenamiento de un modelo de emociones faciales con PyTorch
 
 En esta tarea crearemos un modelo y haremos una serie de comparatifca para poder clasificar las emociones desde el dataset [FER-2013](https://www.kaggle.com/datasets/ananthu017/emotion-detection-fer). En este dataset contiene imágenes de caras **48x48 píxeles en escala de grises**, usando modelos clásicos de vision por computador hasta redes convulucionales, trasfer learning y ensables.
 
@@ -328,7 +329,7 @@ Con la misma precisión y mucho menos coste computacional, la CNN es la opción 
 
 ---
 
-## Tarea II - Filtro de temática libre: J.A.R.V.I.S. / Iron-Man HUD con detección de somnolencia y distracción
+# Tarea II - Filtro de temática libre: J.A.R.V.I.S. / Iron-Man HUD con detección de somnolencia y distracción
 
 En este proyecto se ha desarrollado un demostrador interactivo en tiempo real inspirado en el visor holográfico J.A.R.V.I.S. (Iron-Man), proyectado directamente sobre el rostro capturado por la webcam.
 

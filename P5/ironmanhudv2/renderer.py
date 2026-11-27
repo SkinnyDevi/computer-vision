@@ -5,7 +5,7 @@ import mediapipe as mp
 from ironmanhudv2.alarm_audio import AudioAlarm
 from ironmanhudv2.biometry_engine.biometric_state import BiometricState
 from ironmanhudv2.biometry_engine.tracker import BiometricTracker
-from ironmanhudv2.emotion_engine.emotion_engine import EmotionEngine
+from ironmanhudv2.emotion_engine.emotion_engine import EmotionEngine, EmotionPrediction
 from ironmanhudv2.biometry_engine.engine_config import BiometryConfig
 
 from ironmanhudv2.emotion_engine.emotion_telemetry_hud import EmotionTelemetryHUD
@@ -305,12 +305,28 @@ class IronManHUDRenderer:
             self._bio_state.mar.history,
             self._current_hud_theme
         )
+        
+    def _capture_emotions(self, frame: FrameCanvas) -> list[EmotionPrediction]:
+        if self._bio_state.face_detected and self._bio_state.bbox is not None:
+            return self._emotion_engine.get_confidence_for_emotions(frame, self._bio_state.bbox)
+        else:
+            return []
     
-    def _render_emotion_telemetry(self, frame: FrameCanvas, initial_pos: Point, component_size: Size, panel_size: Size, panel_pos: Point):
+    def _render_emotion_telemetry(self, 
+                                  frame: FrameCanvas, 
+                                  initial_pos: Point,
+                                  component_size: Size,
+                                  panel_size: Size, 
+                                  panel_pos: Point,
+                                  captured_emotions: list[EmotionPrediction] | None = None
+                                  ):
+        if captured_emotions is None:
+            captured_emotions = self._capture_emotions(frame)
+        
         self._emotion_telemetry_hud.render(
             frame,
             Point(panel_pos.x, initial_pos.y + component_size.height + (20 * frame.ui_scale)),
-            self._emotion_engine.get_confidence_for_emotions(frame, self._bio_state.bbox),
+            captured_emotions,
             self._current_hud_theme,
             size=Size(panel_size.width, 150).scale(frame.ui_scale),
         )
@@ -429,6 +445,7 @@ class IronManHUDRenderer:
         
         face_landmarks = self._calculate_landmarks(frame_canvas.canvas, self._last_ts_ms)
         self._bio_state = self._biometric_tracker.update(face_landmarks, frame_canvas.size, time_now)
+        captured_emotions = self._capture_emotions(frame_canvas)
         
         if not self._render_emotions_only:
             self._current_hud_theme = resolve_hud_theme(self._bio_state, time_now)
@@ -457,7 +474,14 @@ class IronManHUDRenderer:
                 
             initial_pos, panel_pos, component_size, panel_size = self._render_3d_head_pose_telemetry(frame_canvas, time_now)
         
-        self._render_emotion_telemetry(frame_canvas, initial_pos, component_size, panel_size, panel_pos)
+        self._render_emotion_telemetry(
+            frame_canvas, 
+            initial_pos, 
+            component_size, 
+            panel_size, 
+            panel_pos, 
+            captured_emotions=captured_emotions
+        )
         
         return frame_canvas.canvas
         

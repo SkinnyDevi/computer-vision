@@ -130,19 +130,44 @@ class EmotionEngine:
     def _crop_face_roi(img: np.ndarray, bbox: BBox, pad: float = 0.12) -> np.ndarray | None:
         if bbox.width <= 0 or bbox.height <= 0:
             return None
-        
+
         h, w = img.shape[:2]
-        px = int(bbox.width * pad)
-        py = int(bbox.height * pad)
-        x1 = max(0, bbox.x1 - px)
-        y1 = max(0, bbox.y1 - py)
-        x2 = min(w, bbox.x2 + px)
-        y2 = min(h, bbox.y2 + py)
-        if x2 <= x1 or y2 <= y1:
+        # Pad the bounding box by a fraction of its size, ensuring the crop remains square.
+        side = max(1, int(round(max(bbox.width, bbox.height) * (1.0 + 2.0 * pad))))
+        cx = 0.5 * (bbox.x1 + bbox.x2)
+        cy = 0.5 * (bbox.y1 + bbox.y2)
+        x1 = int(round(cx - side * 0.5))
+        y1 = int(round(cy - side * 0.5))
+        x2 = x1 + side
+        y2 = y1 + side
+
+        # Clip the coordinates to the image boundaries and handle padding if necessary.
+        ix1 = max(0, x1)
+        iy1 = max(0, y1)
+        ix2 = min(w, x2)
+        iy2 = min(h, y2)
+        if ix2 <= ix1 or iy2 <= iy1:
             return None
-        
-        roi = img[y1:y2, x1:x2]
-        return roi if roi.size > 0 else None
+
+        roi = img[iy1:iy2, ix1:ix2]
+        if roi.size == 0:
+            return None
+
+        # If the crop extends beyond the image boundaries, pad the ROI with replicated border pixels.
+        pad_left = ix1 - x1
+        pad_top = iy1 - y1
+        pad_right = x2 - ix2
+        pad_bottom = y2 - iy2
+        if pad_left or pad_top or pad_right or pad_bottom:
+            roi = cv2.copyMakeBorder(
+                roi,
+                pad_top,
+                pad_bottom,
+                pad_left,
+                pad_right,
+                cv2.BORDER_REPLICATE,
+            )
+        return roi
 
     def _preprocess(self, img: np.ndarray) -> torch.Tensor:
         if img.ndim == 2:
