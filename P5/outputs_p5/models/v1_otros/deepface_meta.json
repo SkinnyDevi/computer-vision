@@ -1,7 +1,7 @@
 {
   "n": 1000,
-  "elapsed_sec": 4.81074030399941,
-  "ms_img": 4.81074030399941,
+  "elapsed_sec": 5.03751078900018,
+  "ms_img": 5.03751078900018,
   "detector_backend": "skip",
   "accuracy": 0.559,
   "f1_macro": 0.5455375336382773

@@ -10,6 +10,147 @@
 ---
 ## Tarea I - Entrenamiento de un modelo de emociones faciales con PyTorch
 
+En esta tarea crearemos un modelo y haremos una serie de comparatifca para poder clasificar las emociones desde el dataset [FER-2013](https://www.kaggle.com/datasets/ananthu017/emotion-detection-fer). En este dataset contiene imágenes de caras **48x48 píxeles en escala de grises**, usando modelos clásicos de vision por computador hasta redes convulucionales, trasfer learning y ensables.
+
+**Clases (7):** `angry`, `disgusted`, `fearful`, `happy`, `neutral`, `sad`, `surprised`.
+
+### Requisitos
+- Python 3.11 (entorno conda `VC_P5`).
+- `numpy`, `pandas`, `matplotlib`, `opencv-python`, `scikit-learn`, `joblib`, `tqdm`.
+- `torch` y `torchvision` (el entrenamiento se hizo con GPU CUDA: NVIDIA RTX 3060 Ti).
+- `deepface` 
+
+### Procedimiento general
+
+Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada uno guarda artefactos que se utilizan para la comparativa, transfer learning y el ensamble. A continuación le ponder una tabla que resume que guarda y que hace.
+
+| Paso | Notebook                  | Qué hace                                                | Qué guarda                     |
+| ---- | ------------------------- | ------------------------------------------------------- | ------------------------------ |
+| 1    | `VC_01_clasicos_deepface` | Entrena PCA/HOG/LBP + KNN/SVM/Stacked y evalúa DeepFace | `v1_otros/`                    |
+| 2    | `VC_02_cnn_pytorch`       | Entrena la CNN propia `CNNFer`                          | `v1_CNN_torch/`                |
+| 3    | `VC_03_transfer_learning` | Entrena ResNet-18 y EfficientNet-B0 en dos fases        | `v1_TL_*/`                     |
+| 4    | `VC_04_ensemble`          | Promedia las probabilidades de CNN y ResNet-18          | `v1_ensemble_cnn_resnet18/`    |
+| 5    | `VC_05_comparativa_test`  | Evalúa todo en `test/` (no entrena)                     | CSV + figuras en `outputs_p5/` |
+
+### Decisiones de diseño comúnes a todo los notebooks.
+
+1. **Una única semilla (`SEED = 42`)** para particiones, inicializaciones y muestreos. Así, 02, 03 y 04 usan exactamente la misma validación.
+2. **Partición estratificada 80/20 de `train/`** (22.967 imágenes de entrenamiento / 5.742 de validación). La validación sirve para elegir hiperparámetros y la mejor época; **`test/` solo se usa en el notebook 05**.
+3. **Métrica principal: F1-macro**, además de accuracy. FER-2013 está desbalanceado (`happy` tiene 7.215 imágenes en train y `disgusted` solo 436) y la accuracy oculta los errores en las clases minoritarias.
+4. **Tratamiento del desbalance** en los modelos profundos: pesos de clase suavizados (`power=0.5`) y `label_smoothing=0.1`.
+5. **TTA horizontal** (promedio de probabilidades de la imagen y su reflejo) en las evaluaciones de los modelos profundos.
+6. **Muestra común de 1.000 imágenes de test** (estratificada y guardada en `deepface_test_idx.npy`) para comparar DeepFace con el resto sobre las mismas imágenes.
+7. **Todo se guarda y se verifica**: cada checkpoint incluye pesos, nombres de clase y configuración de arquitectura, y los notebooks comprueban que al recargarlo se obtienen las mismas predicciones.
+
+### Resumen de cada notebook
+
+#### 01 - Modelos clásicos y DeepFace
+
+- **Descriptores:** píxeles + PCA (95 % de varianza → 252 componentes), HOG (900 características) y LBP (18).
+- **Clasificadores:** KNN (K ∈ {5, 11, 21}) y SVM RBF (C ∈ {1, 10}), elegidos por F1-macro en validación. El SVM se entrena con un subconjunto estratificado de 10.000 imágenes; un **Stacked** (SVM por descriptor + regresión logística) con 5.000.
+- **DeepFace:** solo la acción `emotion`, sin detector de caras (`"skip"`, porque las imágenes ya son caras recortadas), traduciendo sus etiquetas a las de FER-2013.
+- **Idea clave:** HOG es el mejor descriptor; LBP, el peor.
+
+![Vista previa del conjunto de test](img/01_vista_previa_test.png)
+
+![Predicciones de HOG+SVM y DeepFace sobre 12 caras de test](img/01_predicciones_hogsvm_vs_deepface.png)
+
+#### 02 - CNN propia (`CNNFer`)
+
+- 4 bloques convolucionales (48-96-192-384 filtros) con BatchNorm, Dropout2d creciente y cabeza densa de 256 unidades.
+- Aumento de datos integrado en el modelo (volteo, rotación, traslación, zoom, brillo/contraste, _random erasing_).
+- `AdamW` + `ReduceLROnPlateau` + `EarlyStopping`. Mejor época: 59. Validación con TTA: **68,97 % accuracy / 67,24 % F1-macro**.
+
+![Curvas de entrenamiento de la CNN](img/02_curvas_entrenamiento_cnn.png)
+
+![Matriz de confusión de la CNN en validación](img/02_matriz_confusion_cnn_val.png)
+
+#### 03 - Transfer learning
+
+- ResNet-18 y EfficientNet-B0 preentrenadas en ImageNet.
+- **Dos fases:** _warm-up_ de la cabeza (5 épocas, lr 1e-3) y _fine-tuning_ completo (hasta 35 épocas, lr 3e-4).
+- Validación con TTA: ResNet-18 **68,77 % / 66,93 %**; EfficientNet-B0 68,29 % / 66,24 %. ResNet-18 es más rápida de entrenar y de inferir, y es la que pasa al ensamble.
+
+![Matrices de confusión de ResNet-18 y EfficientNet-B0 en validación](img/03_matrices_resnet18_efficientnet_val.png)
+
+#### 04 - Ensamble
+- Media simple (0,5 / 0,5) de las probabilidades de la CNN propia y de ResNet-18, ambas con TTA.
+- Validación: **70,41 % accuracy / 68,71 % F1-macro**, unos +1,5 puntos de F1-macro sobre el mejor modelo individual.
+
+![Matriz de confusión del ensamble en validación](img/04_matriz_confusion_ensamble_val.png)
+
+#### 05 - Comparativa final en test
+
+- Carga todos los artefactos y evalúa en dos escenarios: **test completo (7.178 imágenes)** y **muestra común (1.000 imágenes)**.
+- Genera las tablas, las matrices de confusión, `resultados_comparativa.csv` y `comparativa_final.png`.
+
+![Distribución de clases en test y en la muestra común](img/05_distribucion_test_muestra.png)
+
+### Resultado en test
+
+**Test completo (n = 7.178)**
+
+| Modelo                     | Accuracy | F1-macro |
+| -------------------------- | -------- | -------- |
+| CNN + ResNet-18 (ensamble) | 0,707    | 0,687    |
+| CNN propia                 | 0,694    | 0,675    |
+| ResNet-18                  | 0,685    | 0,661    |
+| HOG + SVM                  | 0,510    | 0,479    |
+| HOG + KNN                  | 0,497    | 0,468    |
+| Stacked                    | 0,467    | 0,418    |
+| PCA + SVM                  | 0,418    | 0,384    |
+| LBP + KNN                  | 0,294    | 0,287    |
+| PCA + KNN                  | 0,291    | 0,309    |
+| LBP + SVM                  | 0,241    | 0,223    |
+
+**Muestra común (n = 1.000), incluye DeepFace**
+
+| Modelo                     | Accuracy | F1-macro | ms/imagen |
+| -------------------------- | -------- | -------- | --------- |
+| CNN propia                 | 0,707    | 0,688    | 1,64      |
+| CNN + ResNet-18 (ensamble) | 0,706    | 0,685    | 4,82      |
+| ResNet-18                  | 0,674    | 0,649    | 3,17      |
+| DeepFace                   | 0,559    | 0,546    | 5,03      |
+| HOG + KNN                  | 0,501    | 0,461    | 0,64      |
+| HOG + SVM                  | 0,496    | 0,432    | 4,87      |
+| Stacked                    | 0,465    | 0,420    | 3,72      |
+
+### Gráficos de la comparativa
+
+![Comparativa final: rendimiento y tiempo de inferencia](img/05_comparativa_final.png)
+
+![Precisión frente a velocidad de inferencia](img/05_precision_vs_velocidad.png)
+
+### Matrices de confusión en test
+
+| CNN propia (test completo)         | ResNet-18 (test completo)                     |
+| ---------------------------------- | --------------------------------------------- |
+| ![CNN](img/05_matriz_cnn_test.png) | ![ResNet-18](img/05_matriz_resnet18_test.png) |
+
+| Ensamble (test completo)                     | HOG + SVM (test completo)                 |
+| -------------------------------------------- | ----------------------------------------- |
+| ![Ensamble](img/05_matriz_ensamble_test.png) | ![HOG+SVM](img/05_matriz_hogsvm_test.png) |
+
+| DeepFace (muestra común)                        |
+| ----------------------------------------------- |
+| ![DeepFace](img/05_matriz_deepface_muestra.png) |
+
+### Conclusión
+- Los modelos profundos superan a los clásicos por casi **20 puntos** de accuracy. DeepFace, sin reentrenar, queda en medio.
+- En los clásicos importa más **el descriptor que el clasificador**: HOG funciona claramente mejor que PCA y LBP.
+- **Transfer learning no mejora a la CNN propia** en este problema: con una receta de entrenamiento equivalente, los resultados son casi iguales. Una posible explicación (hipótesis, no comprobada en los notebooks) es que las imágenes de 48×48 en gris se parecen poco a las de ImageNet.
+- El **ensamble** de dos modelos de naturaleza distinta aporta la mejora más estable en test completo, a cambio de un coste de inferencia mayor.
+- Las clases más difíciles son `sad`, `fearful` y `angry`, que se confunden entre sí y con `neutral`. `happy` y `surprised` se reconocen mejor.
+- En la muestra de 1.000 imágenes la diferencia entre CNN y ensamble (0,1 puntos) no es concluyente; `disgusted` solo tiene 15 imágenes en esa muestra.
+
+### Notas y limitaciones
+
+- **Tiempos de inferencia:** no son comparables entre test completo y muestra. En test completo, los modelos profundos van por lotes de 256; en la muestra, de imagen en imagen. Para comparar velocidades, usar la tabla de la muestra.
+- **Checkpoint del ensamble:** en la ejecución del notebook 04, la verificación de recarga del `.pt` del ensamble devolvió `False` (en 02 y 03 devolvió `True`). Las métricas de 04 y 05 no dependen de ese fichero, porque el ensamble se recalcula promediando las probabilidades, pero conviene revisar su cargador antes de usarlo de forma independiente.
+- **EfficientNet-B0** se entrena y se guarda en el notebook 03, pero no se incluye en la comparativa final.
+- Las advertencias `FutureWarning` de `SVC(probability=True)` son esperadas con la versión de scikit-learn usada y no afectan a los resultados.
+- Las rutas absolutas (`/home/cris/...`) que aparecen en las salidas guardadas son del equipo donde se ejecutó. La raíz del proyecto se detecta automáticamente buscando la carpeta `fer_lib/`.
+
 ## Tarea II - Filtro de temática libre: J.A.R.V.I.S. / Iron-Man HUD con detección de somnolencia y distracción
 
 En este proyecto se ha desarrollado un demostrador interactivo en tiempo real inspirado en el visor holográfico J.A.R.V.I.S. (Iron-Man), proyectado directamente sobre el rostro capturado por la webcam.
@@ -161,3 +302,4 @@ De forma paralela, `_trigger_audio_alarm()` dispara `AudioAlarm.trigger()` con [
 - [MediaPipe Face Landmarker — Google AI Edge](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker)
 - [OpenCV `solvePnP` y estimación de pose](https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html)
 - Soukupová, T., & Čech, J. (2016). *Real-Time Eye Blink Detection using Facial Landmarks*. 21st Computer Vision Winter Workshop.
+- [FER-2013 dataset de las emociones](https://www.kaggle.com/datasets/ananthu017/emotion-detection-fer)
