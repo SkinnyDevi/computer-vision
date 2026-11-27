@@ -23,7 +23,7 @@ Las bibliotecas principales empleadas por el filtro son:
 - `opencv-python` / `opencv-contrib-python`
 - `mediapipe`
 - `numpy`
-- `torch` _(para la carga del módulo de telemetría emocional integrado en el HUD)_
+- `torch` _(instalar versión especifica para cada GPU/TPU)_
 
 Las bibliotecas principales para la comparativa:
 - `torch` y `torchvision` (el entrenamiento se hizo con GPU CUDA: NVIDIA RTX 3060 Ti).
@@ -61,11 +61,17 @@ Los notebooks forman un **pipeline** y **debe ejecutarse en orden**, porque cada
 ## Decisiones de diseño comúnes a todo los notebooks.
 
 1. **Una única semilla (`SEED = 42`)** para particiones, inicializaciones y muestreos. Así, 02, 03 y 04 usan exactamente la misma validación.
-2. **Partición estratificada 80/20 de `train/`** (22.967 imágenes de entrenamiento / 5.742 de validación). La validación sirve para elegir hiperparámetros y la mejor época; **`test/` solo se usa en el notebook 05**.
-3. **Métrica principal: F1-macro**, además de accuracy. FER-2013 está desbalanceado (`happy` tiene 7.215 imágenes en train y `disgusted` solo 436) y la accuracy oculta los errores en las clases minoritarias.
-4. **Tratamiento del desbalance** en los modelos profundos: pesos de clase suavizados (`power=0.5`) y `label_smoothing=0.1`.
+
+2. **Partición estratificada 80/20 de `train/`** (22.967 imágenes de entrenamiento / 5.742 de validación). La validación sirve para elegir hiperparámetros y la mejor época; `test/` solo se usa en el [notebook 05](./notebooks/VC_05_comparativa_test.ipynb).
+
+3. **Métrica principal: F1-macro**, además de accuracy. FER-2013 está desbalanceado (`happy` tiene 7.215 imágenes en train y `disgusted` solo 436) y la precision oculta los errores en las clases minoritarias.
+
+4. **Tratamiento del desbalance en los modelos profundos**: pesos de clase suavizados (`power=0.5`) y `label_smoothing=0.1`.
+
 5. **TTA horizontal** (promedio de probabilidades de la imagen y su reflejo) en las evaluaciones de los modelos profundos.
+
 6. **Muestra común de 1.000 imágenes de test** (estratificada y guardada en `deepface_test_idx.npy`) para comparar DeepFace con el resto sobre las mismas imágenes.
+
 7. **Todo se guarda y se verifica**: cada checkpoint incluye pesos, nombres de clase y configuración de arquitectura, y los notebooks comprueban que al recargarlo se obtienen las mismas predicciones.
 
 ## Resumen de cada notebook
@@ -162,6 +168,7 @@ Los notebooks forman un **pipeline** y **debe ejecutarse en orden**, porque cada
 | DeepFace (muestra común)                        |
 | ----------------------------------------------- |
 | ![DeepFace](img/05_matriz_deepface_muestra.png) |
+
 ### Rendimiento por emoción
  
 Para cada emoción se muestran precisión, recall y F1 en el **test completo** (7.178 imágenes) y en la **muestra común** (1.000 imágenes). En negrita, el mejor valor de cada columna. DeepFace solo se evaluó en la muestra, y de los clásicos el informe por clase solo se imprime para HOG+SVM en el test completo. «—» indica que ese modelo no se evaluó en ese conjunto o que su informe por clase no se generó.
@@ -267,6 +274,7 @@ La segunda mejor reconocida. Los tres modelos profundos están a menos de 1,5 pu
 - El orden de dificultad es parecido en todos los modelos: `happy` y `surprised` se reconocen mejor; `fearful`, `sad` y `angry` peor.
 - Los modelos profundos superan a HOG+SVM en las 7 emociones, con una diferencia de entre 17 y 26 puntos de F1 (la menor en `surprised`, la mayor en `angry`).
 ---
+
 ##  ¿Por qué se usa TTA?
  
 **TTA** (*Test-Time Augmentation*) consiste en hacer la predicción sobre varias versiones de la misma imagen y promediar los resultados. Aquí se usa la versión más simple: la imagen original y su **reflejo horizontal**, y se promedian las probabilidades de ambas.
@@ -278,7 +286,9 @@ p_final = ½ · p(imagen) + ½ · p(imagen volteada)
 ### Motivos
  
 1. **Una cara volteada sigue expresando la misma emoción.** El volteo horizontal no cambia la etiqueta, y es una transformación segura, a diferencia de otras que podrían alterar la expresión.
+
 2. **Es coherente con el entrenamiento.** Tanto la CNN propia como los modelos de transfer learning se entrenan con volteo horizontal aleatorio (p = 0,5) como parte del aumento de datos. En test, el modelo ya ha visto caras en ambas orientaciones, así que el reflejo no le resulta una entrada extraña.
+
 3. **Reduce la varianza de la predicción.** Promediar dos "vistas" de la misma cara suaviza errores puntuales. Es el mismo principio que el del ensamble (notebook 04), pero con un único modelo.
 
 ### Qué mejora (medido en validación, notebook 03)
@@ -294,6 +304,7 @@ La mejora es **pequeña pero consistente**: entre +0,3 y +0,6 puntos de accuracy
  
 - La inferencia necesita **dos pasadas** por la red en lugar de una, por lo que el tiempo por imagen se multiplica aproximadamente por dos. Por eso los ms/imagen de las tablas de este README son con TTA.
 - En una aplicación con restricciones de tiempo real, sería razonable desactivarlo y asumir la pérdida de medio punto.
+
 ### Cómo aplicarlo en la comparativa
  
 - Se aplica a **todos los modelos profundos** (CNN, ResNet-18, EfficientNet-B0 y el ensamble) en validación y test, para que se comparen en igualdad de condiciones entre ellos.
@@ -301,20 +312,22 @@ La mejora es **pequeña pero consistente**: entre +0,3 y +0,6 puntos de accuracy
 - Solo el notebook 03 mide el efecto con y sin TTA; en los notebooks 02, 04 y 05 los resultados se dan directamente con TTA.
 
 ---
-## Conclusión
 
+## Conclusión
 
 **Reconocimiento en tiempo real: ensamble frente a CNN propia.** En la muestra común, la CNN y el ensamble rinden prácticamente igual (70,7 % frente a 70,6 % de accuracy), pero el ensamble necesita unos 4,8 ms por imagen frente a 1,6 ms de la CNN, casi el triple, porque ejecuta además ResNet-18 y aplica TTA en ambos modelos. 
 
-Con la misma precisión y mucho más coste, la CNN es la opción más adecuada para tiempo real. Además, al probarlo en el filtro en vivo, el ensamble representó peor las emociones que la CNN sola. Una posible explicación es que ResNet-18, que de forma individual es menos precisa que la CNN (67,4 % frente a 70,7 % en la muestra), arrastra hacia abajo al ensamble cuando la entrada se aleja de FER-2013. La cámara da imágenes en color, con otra resolución, iluminación y encuadre, mientras que el dataset son caras de 48×48 en gris.
+Con la misma precisión y mucho menos coste computacional, la CNN es la opción más adecuada para tiempo real. Además, al probarlo en el filtro en vivo, el ensamble representó peor las emociones que la CNN sola. Una posible explicación viene dada por ResNet-18 donde, de forma individual, es menos precisa que la CNN (67,4 % frente a 70,7 % en la muestra), arrastra hacia abajo al ensamble cuando la entrada se aleja de FER-2013. La cámara capta imágenes en color, con otra resolución, iluminación y encuadre, mientras que el dataset son caras de 48×48 en gris.
 
 ### Datos a tener en cuenta
+
 - Los modelos profundos superan a los clásicos por casi **20 puntos** de accuracy. DeepFace, sin reentrenar, queda en medio.
 - En los clásicos importa más **el descriptor que el clasificador**: HOG funciona claramente mejor que PCA y LBP.
 - Las clases más difíciles son `sad`, `fearful` y `angry`, que se confunden entre sí y con `neutral`. `happy` y `surprised` se reconocen mejor.
 - En la muestra de 1.000 imágenes la diferencia entre CNN y ensamble (0,1 puntos) no es concluyente; `disgusted` solo tiene 15 imágenes en esa muestra confirmando que esta emoción es complicada de espresar y de demostrar en los modelos en el vídeo.
 
 ---
+
 ## Tarea II - Filtro de temática libre: J.A.R.V.I.S. / Iron-Man HUD con detección de somnolencia y distracción
 
 En este proyecto se ha desarrollado un demostrador interactivo en tiempo real inspirado en el visor holográfico J.A.R.V.I.S. (Iron-Man), proyectado directamente sobre el rostro capturado por la webcam.
@@ -393,11 +406,15 @@ $$\text{MAR} = \frac{\frac{1}{3}\sum_{k=1}^{3}\|a_k - b_k\|}{\|c_{\text{izq}} - 
 Para estimar la orientación tridimensional de la cabeza se corresponden 6 landmarks faciales clave (`PNP_LANDMARK_IDXS`: punta de la nariz `1`, mentón `152`, comisuras oculares externas `263, 33` y comisuras labiales `291, 61`) con sus homólogos en el modelo 3D genérico `MODEL_3D_POINTS`.
 
 1. `solve_head_pose_pnp()` construye una matriz intrínseca aproximada (`focal = width`, centro óptico en `(width/2, height/2)` y distorsión nula) y resuelve la pose con `cv2.solvePnP` (`SOLVEPNP_ITERATIVE`, con respaldo `SOLVEPNP_EPNP` si la solución queda detrás de la cámara).
+
 2. A partir de `cv2.Rodrigues`, `rotation_matrix_to_euler()` extrae los ángulos Pitch, Yaw y Roll en grados.
+
 3. **Calibración neutra:** al pulsar la tecla `c`, `register_calibration()` fija la postura actual como referencia cero (`_pose_offset`) y normaliza los ángulos relativos al rango `[-180°, 180°]` antes de suavizarlos con EMA (`alpha = 0.4`).
+
 4. **Alertas de atención:** tras mantenerse la desviación durante `pose_alert_seconds = 1.0 s`:
    - **Cabeceo (`nodding_off`):** `pitch <= -18.0°`
    - **Distracción (`looking_away`):** `|yaw| >= 28.0°` o `pitch >= 25.0°`
+
 5. **Radar 3D:** el panel `3D HEAD POSE TELEMETRY` muestra los ángulos numéricos, el estado de calibración y un radar circular donde el punto se desplaza según `Yaw` (eje horizontal) y `Pitch` (eje vertical).
 
 Todos estos parametros son configurables en el cuaderno principal [`VC_IronMan.ipynb`](./VC_IronMan.ipynb) mediante la variable `BIOMETRY_CONFIG`.
