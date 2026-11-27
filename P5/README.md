@@ -14,13 +14,13 @@ En esta tarea crearemos un modelo y haremos una serie de comparatifca para poder
 
 **Clases (7):** `angry`, `disgusted`, `fearful`, `happy`, `neutral`, `sad`, `surprised`.
 
-### Requisitos
+## Requisitos
 - Python 3.11 (entorno conda `VC_P5`).
 - `numpy`, `pandas`, `matplotlib`, `opencv-python`, `scikit-learn`, `joblib`, `tqdm`.
 - `torch` y `torchvision` (el entrenamiento se hizo con GPU CUDA: NVIDIA RTX 3060 Ti).
 - `deepface` 
 
-### Procedimiento general
+## Procedimiento general
 
 Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada uno guarda artefactos que se utilizan para la comparativa, transfer learning y el ensamble. A continuación le ponder una tabla que resume que guarda y que hace.
 
@@ -32,7 +32,7 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 | 4    | `VC_04_ensemble`          | Promedia las probabilidades de CNN y ResNet-18          | `v1_ensemble_cnn_resnet18/`    |
 | 5    | `VC_05_comparativa_test`  | Evalúa todo en `test/` (no entrena)                     | CSV + figuras en `outputs_p5/` |
 
-### Decisiones de diseño comúnes a todo los notebooks.
+## Decisiones de diseño comúnes a todo los notebooks.
 
 1. **Una única semilla (`SEED = 42`)** para particiones, inicializaciones y muestreos. Así, 02, 03 y 04 usan exactamente la misma validación.
 2. **Partición estratificada 80/20 de `train/`** (22.967 imágenes de entrenamiento / 5.742 de validación). La validación sirve para elegir hiperparámetros y la mejor época; **`test/` solo se usa en el notebook 05**.
@@ -42,9 +42,9 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 6. **Muestra común de 1.000 imágenes de test** (estratificada y guardada en `deepface_test_idx.npy`) para comparar DeepFace con el resto sobre las mismas imágenes.
 7. **Todo se guarda y se verifica**: cada checkpoint incluye pesos, nombres de clase y configuración de arquitectura, y los notebooks comprueban que al recargarlo se obtienen las mismas predicciones.
 
-### Resumen de cada notebook
+## Resumen de cada notebook
 
-#### 01 - Modelos clásicos y DeepFace
+### 01 - Modelos clásicos y DeepFace
 
 - **Descriptores:** píxeles + PCA (95 % de varianza → 252 componentes), HOG (900 características) y LBP (18).
 - **Clasificadores:** KNN (K ∈ {5, 11, 21}) y SVM RBF (C ∈ {1, 10}), elegidos por F1-macro en validación. El SVM se entrena con un subconjunto estratificado de 10.000 imágenes; un **Stacked** (SVM por descriptor + regresión logística) con 5.000.
@@ -55,7 +55,7 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 
 ![Predicciones de HOG+SVM y DeepFace sobre 12 caras de test](img/01_predicciones_hogsvm_vs_deepface.png)
 
-#### 02 - CNN propia (`CNNFer`)
+### 02 - CNN propia (`CNNFer`)
 
 - 4 bloques convolucionales (48-96-192-384 filtros) con BatchNorm, Dropout2d creciente y cabeza densa de 256 unidades.
 - Aumento de datos integrado en el modelo (volteo, rotación, traslación, zoom, brillo/contraste, _random erasing_).
@@ -65,7 +65,7 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 
 ![Matriz de confusión de la CNN en validación](img/02_matriz_confusion_cnn_val.png)
 
-#### 03 - Transfer learning
+### 03 - Transfer learning
 
 - ResNet-18 y EfficientNet-B0 preentrenadas en ImageNet.
 - **Dos fases:** _warm-up_ de la cabeza (5 épocas, lr 1e-3) y _fine-tuning_ completo (hasta 35 épocas, lr 3e-4).
@@ -73,20 +73,20 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 
 ![Matrices de confusión de ResNet-18 y EfficientNet-B0 en validación](img/03_matrices_resnet18_efficientnet_val.png)
 
-#### 04 - Ensamble
+### 04 - Ensamble
 - Media simple (0,5 / 0,5) de las probabilidades de la CNN propia y de ResNet-18, ambas con TTA.
 - Validación: **70,41 % accuracy / 68,71 % F1-macro**, unos +1,5 puntos de F1-macro sobre el mejor modelo individual.
 
 ![Matriz de confusión del ensamble en validación](img/04_matriz_confusion_ensamble_val.png)
 
-#### 05 - Comparativa final en test
+### 05 - Comparativa final en test
 
 - Carga todos los artefactos y evalúa en dos escenarios: **test completo (7.178 imágenes)** y **muestra común (1.000 imágenes)**.
 - Genera las tablas, las matrices de confusión, `resultados_comparativa.csv` y `comparativa_final.png`.
 
 ![Distribución de clases en test y en la muestra común](img/05_distribucion_test_muestra.png)
 
-### Resultado en test
+## Resultado en test
 
 **Test completo (n = 7.178)**
 
@@ -115,13 +115,13 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 | HOG + SVM                  | 0,496    | 0,432    | 4,87      |
 | Stacked                    | 0,465    | 0,420    | 3,72      |
 
-### Gráficos de la comparativa
+## Gráficos de la comparativa
 
 ![Comparativa final: rendimiento y tiempo de inferencia](img/05_comparativa_final.png)
 
 ![Precisión frente a velocidad de inferencia](img/05_precision_vs_velocidad.png)
 
-### Matrices de confusión en test
+## Matrices de confusión en test
 
 | CNN propia (test completo)         | ResNet-18 (test completo)                     |
 | ---------------------------------- | --------------------------------------------- |
@@ -135,7 +135,7 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 | ----------------------------------------------- |
 | ![DeepFace](img/05_matriz_deepface_muestra.png) |
 
-### Conclusión
+## Conclusión
 - Los modelos profundos superan a los clásicos por casi **20 puntos** de accuracy. DeepFace, sin reentrenar, queda en medio.
 - En los clásicos importa más **el descriptor que el clasificador**: HOG funciona claramente mejor que PCA y LBP.
 - **Transfer learning no mejora a la CNN propia** en este problema: con una receta de entrenamiento equivalente, los resultados son casi iguales. Una posible explicación (hipótesis, no comprobada en los notebooks) es que las imágenes de 48×48 en gris se parecen poco a las de ImageNet.
@@ -143,7 +143,7 @@ Los notebooks forman un __pipeline__ y **debe ejecutarse en orden**, porque cada
 - Las clases más difíciles son `sad`, `fearful` y `angry`, que se confunden entre sí y con `neutral`. `happy` y `surprised` se reconocen mejor.
 - En la muestra de 1.000 imágenes la diferencia entre CNN y ensamble (0,1 puntos) no es concluyente; `disgusted` solo tiene 15 imágenes en esa muestra.
 
-### Notas y limitaciones
+## Notas y limitaciones
 
 - **Tiempos de inferencia:** no son comparables entre test completo y muestra. En test completo, los modelos profundos van por lotes de 256; en la muestra, de imagen en imagen. Para comparar velocidades, usar la tabla de la muestra.
 - **Checkpoint del ensamble:** en la ejecución del notebook 04, la verificación de recarga del `.pt` del ensamble devolvió `False` (en 02 y 03 devolvió `True`). Las métricas de 04 y 05 no dependen de ese fichero, porque el ensamble se recalcula promediando las probabilidades, pero conviene revisar su cargador antes de usarlo de forma independiente.
